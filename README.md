@@ -1,0 +1,172 @@
+# agent-memory-contracts
+
+**JSON Schemas and Python contracts for AI agent memory integrity.**
+
+[![CI](https://github.com/eoniclife/agent-memory-contracts/actions/workflows/ci.yml/badge.svg)](https://github.com/eoniclife/agent-memory-contracts/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](https://www.python.org/downloads/)
+[![Standard library only](https://img.shields.io/badge/dependencies-none-success)](https://github.com/eoniclife/agent-memory-contracts)
+[![Schemas](https://img.shields.io/badge/JSON_Schemas-23-blue)](https://github.com/eoniclife/agent-memory-contracts/tree/main/src/agent_memory_contracts/schemas)
+[![Tests](https://img.shields.io/badge/tests-49_passing-brightgreen)](https://github.com/eoniclife/agent-memory-contracts/tree/main/tests)
+
+> The core design question this library answers: *if an LLM extracts
+> something from raw sources, how do you keep that extraction from
+> silently becoming "memory" the agent treats as truth?*
+
+This library was extracted from a 30+ sprint falsification-first build
+of a private agent memory kernel. The schemas and id formats are
+stable and treated as `1.0.0` in this initial release.
+
+## The six memory planes
+
+```
+  raw sources
+      |
+      v
+  +---------+      +-------------+      +-----------+
+  | EVIDENCE| ---> |  CANDIDATE  | ---> |   LEDGER  |  (trusted memory)
+  +---------+      +-------------+      +-----------+
+       ^              untrusted extraction
+       |
+  +-------------+     +-----------+
+  |   TASTE     |     |  REDUCER  |  (only authority that can promote)
+  |  TasteCard  |<----| DECISIONS |
+  +-------------+     +-----------+
+       |
+       v
+  +-----------+        +-----------+
+  |   STATE   |------->|CONTEXTPACK|  (task-ready bundles)
+  +-----------+        +-----------+
+```
+
+See [`docs/architecture.md`](docs/architecture.md) for the full design
+document, including the reducer authorization pattern, temporal
+validity rules, and the supersession-reciprocity invariant.
+
+## Quickstart
+
+```bash
+pip install agent-memory-contracts
+```
+
+```python
+from agent_memory_contracts import (
+    SourceRecord, EvidenceSpan,
+    CandidateTasteSignal, PreferenceLedgerEntry, MemoryReducerDecision,
+    validate_ledger_bundle,
+    make_source_id, make_span_id, make_candidate_id,
+    make_ledger_entry_id, make_reducer_decision_id,
+)
+
+# 1. Build a SourceRecord and an EvidenceSpan.
+source_id = make_source_id("chatgpt_conversation", "https://...", "a" * 64)
+span_id = make_span_id(source_id, "line_range", "10-15")
+
+# 2. An LLM extracts a candidate interpretation (untrusted).
+ctsig_id = make_candidate_id("taste_signal", [span_id], {"signal_kind": "principle", ...})
+
+# 3. The reducer promotes it to a trusted ledger entry.
+ledger_id = make_ledger_entry_id("preference", [span_id], {"ledger_type": "preference", ...})
+reducer_id = make_reducer_decision_id("promote", [ctsig_id], [ledger_id], [span_id], "...")
+
+# 4. Build all three; the bundle validator checks the whole graph.
+validate_ledger_bundle(
+    source_records=[...], evidence_spans=[...], candidate_records=[...],
+    reducer_decisions=[...], ledger_entries=[...],
+)
+```
+
+Two runnable end-to-end examples:
+
+- [`examples/quickstart.py`](examples/quickstart.py) -- minimal source -> span -> candidate -> ledger
+- [`examples/extract_taste_cards.py`](examples/extract_taste_cards.py) -- full transcript -> multiple taste cards, with contrast pairs
+
+## What's in the box
+
+- **23 JSON Schemas** (Draft 2020-12) in `src/agent_memory_contracts/schemas/`
+- **14 Python modules** of `frozen=True` dataclasses and validators
+- **5 bundle validators** that reject the bundle on dangling references,
+  non-reciprocal supersession, candidate/ledger field leakage, and
+  reducer authorization mismatch
+- **10 temporal query helpers** for the taste and state planes
+- **Content-derived ID helpers** for every record type, using SHA-256
+  of canonical JSON. Same payload = same ID, forever.
+- **Zero runtime dependencies** (stdlib only)
+- **~2,500 lines of Python**, ~600 lines of JSON Schema
+- **49 tests** covering id derivation, contract validation, bundle
+  integrity, and temporal queries
+
+## Design principles
+
+These are the rules the contracts enforce, in the type system, because
+the alternative is a runtime bug you'll only catch in production.
+
+1. **Untrusted extraction cannot become memory without a reducer.**
+   Candidates have ID prefixes `cand_*`; ledger entries have `fact_` /
+   `pref_` / `dec_`. A `Candidate*` object physically cannot carry the
+   fields a ledger entry needs, and a `LedgerEntry` will refuse to
+   validate if it carries candidate-only fields.
+2. **Every trusted record is authorized by an explicit reducer decision.**
+   A `MemoryReducerDecision` lists the candidate ids, ledger entry ids,
+   and evidence span ids it authorizes. A ledger entry whose
+   `reducer_decision_id` doesn't authorize it -- or whose status and
+   decision_type don't match -- is rejected.
+3. **Supersession is a directed graph, not a flag.** If entry B
+   supersedes entry A, then A's `superseded_by` must contain B and B's
+   `supersedes` must contain A. The bundle validator checks reciprocity
+   and temporal ordering.
+4. **IDs are content-derived, not assigned.** A taste card with the
+   same evidence and the same normalized payload has the same id
+   forever. Reproducible, deduplicatable, falsifiable.
+5. **Generated views are views, not memory.** A `ContextPack` is a
+   task-ready bundle; it carries a `BuildReceipt` (what was selected)
+   and a `ValidationReport` (what passed). The receipt, not the
+   context pack, is the audit trail.
+
+## Install
+
+```bash
+pip install agent-memory-contracts
+```
+
+Or from source:
+
+```bash
+git clone https://github.com/eoniclife/agent-memory-contracts.git
+cd agent-memory-contracts
+pip install -e ".[dev]"
+```
+
+Requires Python 3.10+. No runtime dependencies.
+
+## Development
+
+```bash
+pip install -e ".[dev]"
+pytest -q                            # 49 tests
+PYTHONPATH=src python examples/quickstart.py
+PYTHONPATH=src python examples/extract_taste_cards.py
+```
+
+Tests are stdlib `unittest` (no test framework dependency at runtime).
+CI runs on Python 3.10, 3.11, 3.12 via GitHub Actions.
+
+## License
+
+Apache-2.0. See [LICENSE](LICENSE).
+
+## Origin and provenance
+
+These contracts are extracted from `avs-memory-kernel` (private), a
+governance-heavy AI agent memory kernel built with a falsification-first
+sprint protocol. Each sprint was scoped, falsified against a bench,
+and sealed by GPT review before merging. The extracted slice here is
+what the rest of the kernel (workers, runtime, retrieval substrate)
+builds on top of -- published first because it is the most generally
+useful part.
+
+If you build on this and want the upstream kernel to track your
+changes, open an issue; if you want to see the full design history
+(sprints, review packets, evals), the `eoniclife/avs-memory-kernel`
+review packets are part of the public record of how these schemas got
+where they are.
