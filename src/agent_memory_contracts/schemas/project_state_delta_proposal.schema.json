@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "created_at": {
+      "type": "string"
+    },
+    "current_state_summary_redacted": {
+      "type": "string"
+    },
+    "id": {
+      "pattern": "^projdelta_",
+      "type": "string"
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "project_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "promotion_allowed_without_reducer": {
+      "type": "boolean"
+    },
+    "proposed_action": {
+      "type": "string"
+    },
+    "proposed_delta_summary_redacted": {
+      "type": "string"
+    },
+    "requires_human_review": {
+      "type": "boolean"
+    },
+    "requires_reducer_decision": {
+      "type": "boolean"
+    },
+    "resolver_input_bundle_id": {
+      "type": "string"
+    },
+    "resolver_run_id": {
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "staleness_effect": {
+      "type": "string"
+    },
+    "supporting_candidate_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "supporting_evidence_span_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "supporting_intake_envelope_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "target_project_state_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "id",
+    "schema_version",
+    "created_at",
+    "resolver_run_id",
+    "resolver_input_bundle_id",
+    "project_id",
+    "target_project_state_ids",
+    "proposed_action",
+    "current_state_summary_redacted",
+    "proposed_delta_summary_redacted",
+    "supporting_intake_envelope_ids",
+    "supporting_candidate_ids",
+    "supporting_evidence_span_ids",
+    "staleness_effect",
+    "requires_human_review",
+    "requires_reducer_decision",
+    "promotion_allowed_without_reducer",
+    "metadata"
+  ],
+  "title": "ProjectStateDeltaProposal",
+  "type": "object"
+}

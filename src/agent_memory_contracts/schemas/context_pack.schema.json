@@ -1,0 +1,167 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ContextPack",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "schema_version",
+    "pack_type",
+    "task",
+    "authority",
+    "state",
+    "trusted_memory",
+    "candidate_context",
+    "evidence",
+    "stale_or_superseded",
+    "conflicts_and_uncertainties",
+    "constraints",
+    "retrieval_trace",
+    "pack_hash_sha256",
+    "metadata"
+  ],
+  "properties": {
+    "id": { "type": "string", "pattern": "^ctx_[0-9a-f]{24}$" },
+    "schema_version": { "const": "1.0.0" },
+    "pack_type": { "const": "context_pack" },
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["task_id", "task_title", "task_type", "task_summary", "project_id", "risk_class", "sensitivity"],
+      "properties": {
+        "task_id": { "type": "string", "minLength": 1 },
+        "task_title": { "type": "string", "minLength": 1 },
+        "task_type": { "enum": ["architecture_review", "writing", "research", "decision", "implementation", "review", "other"] },
+        "task_summary": { "type": "string", "minLength": 1 },
+        "project_id": { "type": ["string", "null"] },
+        "risk_class": { "enum": ["low", "medium", "high"] },
+        "sensitivity": { "enum": ["public", "internal", "private", "sensitive", "highly_sensitive"] }
+      }
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["created_by", "created_at", "source", "schema_pack_version", "kernel_commit"],
+      "properties": {
+        "created_by": { "type": "string", "minLength": 1 },
+        "created_at": { "type": "string", "minLength": 1 },
+        "source": { "enum": ["synthetic_fixture", "manual", "compiler", "other"] },
+        "schema_pack_version": { "type": "string", "minLength": 1 },
+        "kernel_commit": { "type": ["string", "null"] }
+      }
+    },
+    "state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["core_state_id", "project_state_ids"],
+      "properties": {
+        "core_state_id": { "type": ["string", "null"], "pattern": "^corestate_[0-9a-f]{24}$" },
+          "project_state_ids": { "type": "array", "items": { "type": "string", "pattern": "^projstate_[0-9a-f]{24}$" } }
+      },
+      "anyOf": [
+        { "properties": { "core_state_id": { "type": "string" } } },
+        { "properties": { "project_state_ids": { "minItems": 1 } } }
+      ]
+    },
+    "trusted_memory": { "$ref": "#/$defs/trusted_memory" },
+    "candidate_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidate_task_ids", "candidate_claim_ids", "candidate_preference_ids", "candidate_decision_ids", "candidate_taste_signal_ids"],
+      "properties": {
+        "candidate_task_ids": { "type": "array", "items": { "type": "string", "pattern": "^cand_task_[0-9a-f]{24}$" } },
+        "candidate_claim_ids": { "type": "array", "items": { "type": "string", "pattern": "^cand_claim_[0-9a-f]{24}$" } },
+        "candidate_preference_ids": { "type": "array", "items": { "type": "string", "pattern": "^cand_pref_[0-9a-f]{24}$" } },
+        "candidate_decision_ids": { "type": "array", "items": { "type": "string", "pattern": "^cand_decision_[0-9a-f]{24}$" } },
+        "candidate_taste_signal_ids": { "type": "array", "items": { "type": "string", "pattern": "^cand_taste_[0-9a-f]{24}$" } }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_record_ids", "episode_record_ids", "evidence_span_ids", "primary_evidence_span_ids"],
+      "properties": {
+        "source_record_ids": { "type": "array", "items": { "type": "string", "pattern": "^src_[0-9a-f]{24}$" } },
+        "episode_record_ids": { "type": "array", "items": { "type": "string", "pattern": "^ep_[0-9a-f]{24}$" } },
+        "evidence_span_ids": { "type": "array", "minItems": 1, "items": { "type": "string", "pattern": "^span_[0-9a-f]{24}$" } },
+        "primary_evidence_span_ids": { "type": "array", "minItems": 1, "items": { "type": "string", "pattern": "^span_[0-9a-f]{24}$" } }
+      }
+    },
+    "stale_or_superseded": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fact_ids", "preference_ids", "decision_ids", "taste_card_ids", "project_state_ids", "core_state_ids"],
+      "properties": {
+        "fact_ids": { "type": "array", "items": { "type": "string", "pattern": "^fact_[0-9a-f]{24}$" } },
+        "preference_ids": { "type": "array", "items": { "type": "string", "pattern": "^pref_[0-9a-f]{24}$" } },
+        "decision_ids": { "type": "array", "items": { "type": "string", "pattern": "^dec_[0-9a-f]{24}$" } },
+        "taste_card_ids": { "type": "array", "items": { "type": "string", "pattern": "^taste_[0-9a-f]{24}$" } },
+        "project_state_ids": { "type": "array", "items": { "type": "string", "pattern": "^projstate_[0-9a-f]{24}$" } },
+        "core_state_ids": { "type": "array", "items": { "type": "string", "pattern": "^corestate_[0-9a-f]{24}$" } }
+      }
+    },
+    "conflicts_and_uncertainties": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "summary", "related_ids"],
+        "properties": {
+          "kind": { "enum": ["conflict", "uncertainty", "missing_info", "contested_memory", "stale_memory"] },
+          "summary": { "type": "string", "minLength": 1 },
+          "related_ids": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "constraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["permission_policy_id", "allowed_actions", "forbidden_actions", "privacy_notes", "token_budget"],
+      "properties": {
+        "permission_policy_id": { "type": "string", "minLength": 1 },
+        "allowed_actions": { "type": "array", "items": { "enum": ["read", "draft", "analyze", "propose", "code", "test"] } },
+        "forbidden_actions": { "type": "array", "contains": { "const": "mutate_trusted_memory" }, "items": { "enum": ["send", "publish", "deploy", "delete", "mutate_trusted_memory", "write_gbrain", "run_workers"] } },
+        "privacy_notes": { "type": "array", "items": { "type": "string" } },
+        "token_budget": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "retrieval_trace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["queries", "included_ids", "excluded", "build_inputs_hash"],
+      "properties": {
+        "queries": { "type": "array", "items": { "type": "string" } },
+        "included_ids": { "type": "array", "items": { "type": "string" } },
+        "excluded": { "$ref": "#/$defs/excluded" },
+        "build_inputs_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "pack_hash_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "metadata": { "type": "object" }
+  },
+  "$defs": {
+    "trusted_memory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fact_ids", "preference_ids", "decision_ids", "taste_card_ids"],
+      "properties": {
+        "fact_ids": { "type": "array", "items": { "type": "string", "pattern": "^fact_[0-9a-f]{24}$" } },
+        "preference_ids": { "type": "array", "items": { "type": "string", "pattern": "^pref_[0-9a-f]{24}$" } },
+        "decision_ids": { "type": "array", "items": { "type": "string", "pattern": "^dec_[0-9a-f]{24}$" } },
+        "taste_card_ids": { "type": "array", "items": { "type": "string", "pattern": "^taste_[0-9a-f]{24}$" } }
+      }
+    },
+    "excluded": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "reason"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "reason": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

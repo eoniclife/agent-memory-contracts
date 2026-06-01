@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ContextPackBuildReceipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "schema_version",
+    "context_pack_id",
+    "created_at",
+    "builder",
+    "input_refs",
+    "selection_policy",
+    "excluded",
+    "warnings",
+    "metadata"
+  ],
+  "properties": {
+    "id": { "type": "string", "pattern": "^ctxreceipt_[0-9a-f]{24}$" },
+    "schema_version": { "const": "1.0.0" },
+    "context_pack_id": { "type": "string", "pattern": "^ctx_[0-9a-f]{24}$" },
+    "created_at": { "type": "string", "minLength": 1 },
+    "builder": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["agent", "model", "tool", "mode"],
+      "properties": {
+        "agent": { "type": "string", "minLength": 1 },
+        "model": { "type": ["string", "null"] },
+        "tool": { "type": ["string", "null"] },
+        "mode": { "enum": ["synthetic_fixture", "manual", "compiler"] }
+      }
+    },
+    "input_refs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["core_state_ids", "project_state_ids", "ledger_entry_ids", "taste_card_ids", "candidate_ids", "evidence_span_ids"],
+      "properties": {
+        "core_state_ids": { "type": "array", "items": { "type": "string", "pattern": "^corestate_[0-9a-f]{24}$" } },
+        "project_state_ids": { "type": "array", "items": { "type": "string", "pattern": "^projstate_[0-9a-f]{24}$" } },
+        "ledger_entry_ids": { "type": "array", "items": { "type": "string", "pattern": "^(fact|pref|dec)_[0-9a-f]{24}$" } },
+        "taste_card_ids": { "type": "array", "items": { "type": "string", "pattern": "^taste_[0-9a-f]{24}$" } },
+        "candidate_ids": { "type": "array", "items": { "type": "string", "pattern": "^cand_" } },
+        "evidence_span_ids": { "type": "array", "items": { "type": "string", "pattern": "^span_[0-9a-f]{24}$" } }
+      }
+    },
+    "selection_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["current_cutoff", "include_stale", "include_contested", "include_candidates", "token_budget"],
+      "properties": {
+        "current_cutoff": { "type": "string", "minLength": 1 },
+        "include_stale": { "type": "boolean" },
+        "include_contested": { "type": "boolean" },
+        "include_candidates": { "type": "boolean" },
+        "token_budget": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "excluded": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "reason"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "reason": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "warnings": { "type": "array", "items": { "type": "string" } },
+    "metadata": { "type": "object" }
+  }
+}
