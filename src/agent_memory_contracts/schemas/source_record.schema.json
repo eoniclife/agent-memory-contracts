@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eoniclife.github.io/agent-memory-contracts/schemas/source_record.schema.json",
+  "title": "SourceRecord",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "schema_version",
+    "source_type",
+    "title",
+    "origin_uri",
+    "raw_ref",
+    "content_hash_sha256",
+    "captured_at",
+    "observed_at",
+    "author_or_sender",
+    "participants",
+    "privacy_class",
+    "custody_status",
+    "parser_version",
+    "metadata"
+  ],
+  "properties": {
+    "id": {"type": "string", "pattern": "^src_[0-9a-f]{16,}$"},
+    "schema_version": {"const": "1.0.0"},
+    "source_type": {
+      "type": "string",
+      "enum": [
+        "chatgpt_conversation",
+        "codex_session",
+        "email_thread",
+        "whatsapp_thread",
+        "meeting_transcript",
+        "bookmark",
+        "web_article",
+        "pdf",
+        "repo_diff",
+        "manual_note",
+        "other"
+      ]
+    },
+    "title": {"type": "string", "minLength": 1},
+    "origin_uri": {"type": ["string", "null"]},
+    "raw_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "value"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["local_path", "external_uri", "redacted_fixture", "synthetic_fixture", "content_hash_only"]
+        },
+        "value": {"type": "string"}
+      }
+    },
+    "content_hash_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "captured_at": {"type": "string", "format": "date-time"},
+    "observed_at": {"type": ["string", "null"], "format": "date-time"},
+    "author_or_sender": {"type": ["string", "null"]},
+    "participants": {"type": "array", "items": {"type": "string"}},
+    "privacy_class": {"type": "string", "enum": ["public", "internal", "private", "sensitive", "highly_sensitive"]},
+    "custody_status": {"type": "string", "enum": ["synthetic", "redacted", "local_ignored", "external_pointer", "unavailable"]},
+    "parser_version": {"type": "string", "minLength": 1},
+    "metadata": {"type": "object"}
+  }
+}
+

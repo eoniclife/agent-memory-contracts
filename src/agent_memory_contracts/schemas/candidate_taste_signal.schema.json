@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eoniclife.github.io/agent-memory-contracts/schemas/candidate_taste_signal.schema.json",
+  "title": "CandidateTasteSignal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "schema_version", "candidate_type", "source_record_ids", "episode_record_ids", "evidence_span_ids", "natural_language_summary", "extracted_by", "extracted_at", "confidence", "risk_class", "status", "review", "metadata", "domain", "signal_kind", "taste_text", "example_span_ids", "contrast_span_ids", "strength_hint"],
+  "properties": {
+    "id": {"type": "string", "pattern": "^cand_taste_[0-9a-f]{24}$"},
+    "schema_version": {"const": "1.0.0"},
+    "candidate_type": {"const": "taste_signal"},
+    "source_record_ids": {"type": "array", "items": {"type": "string", "pattern": "^src_[0-9a-f]{16,}$"}},
+    "episode_record_ids": {"type": "array", "items": {"type": "string", "pattern": "^ep_[0-9a-f]{16,}$"}},
+    "evidence_span_ids": {"type": "array", "minItems": 1, "items": {"type": "string", "pattern": "^span_[0-9a-f]{16,}$"}},
+    "natural_language_summary": {"type": "string", "minLength": 1},
+    "extracted_by": {"type": "object", "additionalProperties": false, "required": ["agent", "model", "tool", "prompt_ref"], "properties": {"agent": {"type": "string", "minLength": 1}, "model": {"type": "string", "minLength": 1}, "tool": {"type": ["string", "null"]}, "prompt_ref": {"type": ["string", "null"]}}},
+    "extracted_at": {"type": "string", "format": "date-time"},
+    "confidence": {"type": "string", "enum": ["low", "medium", "high"]},
+    "risk_class": {"type": "string", "enum": ["low", "medium", "high"]},
+    "status": {"type": "string", "enum": ["candidate", "rejected", "promoted", "duplicate", "needs_review"]},
+    "review": {"type": "object", "additionalProperties": false, "required": ["reviewed_by", "reviewed_at", "review_notes"], "properties": {"reviewed_by": {"type": ["string", "null"]}, "reviewed_at": {"type": ["string", "null"], "format": "date-time"}, "review_notes": {"type": ["string", "null"]}}},
+    "metadata": {"type": "object"},
+    "domain": {"type": "string", "enum": ["writing", "product", "investing", "architecture", "design", "communication", "operations", "other"]},
+    "signal_kind": {"type": "string", "enum": ["positive_example", "negative_example", "contrast_pair", "objection", "principle", "correction"]},
+    "taste_text": {"type": "string", "minLength": 1},
+    "example_span_ids": {"type": "array", "items": {"type": "string", "pattern": "^span_[0-9a-f]{16,}$"}},
+    "contrast_span_ids": {"type": "array", "items": {"type": "string", "pattern": "^span_[0-9a-f]{16,}$"}},
+    "strength_hint": {"type": "string", "enum": ["weak", "medium", "strong", "hard_constraint", "unknown"]}
+  },
+  "anyOf": [
+    {"properties": {"example_span_ids": {"minItems": 1}}},
+    {"properties": {"contrast_span_ids": {"minItems": 1}}}
+  ],
+  "not": {"anyOf": [{"required": ["taste_card_id"]}, {"required": ["promoted_at"]}, {"required": ["valid_from"]}, {"required": ["valid_until"]}, {"required": ["supersedes"]}, {"required": ["superseded_by"]}, {"required": ["project_state_id"]}]}
+}

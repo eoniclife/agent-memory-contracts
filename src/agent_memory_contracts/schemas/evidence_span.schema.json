@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eoniclife.github.io/agent-memory-contracts/schemas/evidence_span.schema.json",
+  "title": "EvidenceSpan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "schema_version",
+    "source_id",
+    "episode_id",
+    "locator",
+    "text_excerpt",
+    "excerpt_policy",
+    "span_hash_sha256",
+    "privacy_class",
+    "metadata"
+  ],
+  "properties": {
+    "id": {"type": "string", "pattern": "^span_[0-9a-f]{16,}$"},
+    "schema_version": {"const": "1.0.0"},
+    "source_id": {"type": "string", "pattern": "^src_[0-9a-f]{16,}$"},
+    "episode_id": {"type": ["string", "null"], "pattern": "^ep_[0-9a-f]{16,}$"},
+    "locator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "value"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "line_range",
+            "byte_range",
+            "message_range",
+            "timestamp_range",
+            "page_range",
+            "url_fragment",
+            "synthetic_locator"
+          ]
+        },
+        "value": {"type": "string", "minLength": 1}
+      }
+    },
+    "text_excerpt": {"type": ["string", "null"]},
+    "excerpt_policy": {"type": "string", "enum": ["none", "synthetic", "redacted", "short_quote_allowed"]},
+    "span_hash_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "privacy_class": {"type": "string", "enum": ["public", "internal", "private", "sensitive", "highly_sensitive"]},
+    "metadata": {"type": "object"}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "text_excerpt": {"type": "string"}
+        },
+        "required": ["text_excerpt"]
+      },
+      "then": {
+        "properties": {
+          "excerpt_policy": {"enum": ["synthetic", "redacted", "short_quote_allowed"]}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "excerpt_policy": {"const": "none"}
+        },
+        "required": ["excerpt_policy"]
+      },
+      "then": {
+        "properties": {
+          "text_excerpt": {"type": "null"}
+        }
+      }
+    }
+  ]
+}

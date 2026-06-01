@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eoniclife.github.io/agent-memory-contracts/schemas/candidate_preference.schema.json",
+  "title": "CandidatePreference",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "schema_version", "candidate_type", "source_record_ids", "episode_record_ids", "evidence_span_ids", "natural_language_summary", "extracted_by", "extracted_at", "confidence", "risk_class", "status", "review", "metadata", "subject", "preference_text", "domain", "scope", "strength_hint", "counterevidence_span_ids"],
+  "properties": {
+    "id": {"type": "string", "pattern": "^cand_pref_[0-9a-f]{24}$"},
+    "schema_version": {"const": "1.0.0"},
+    "candidate_type": {"const": "preference"},
+    "source_record_ids": {"type": "array", "items": {"type": "string", "pattern": "^src_[0-9a-f]{16,}$"}},
+    "episode_record_ids": {"type": "array", "items": {"type": "string", "pattern": "^ep_[0-9a-f]{16,}$"}},
+    "evidence_span_ids": {"type": "array", "minItems": 1, "items": {"type": "string", "pattern": "^span_[0-9a-f]{16,}$"}},
+    "natural_language_summary": {"type": "string", "minLength": 1},
+    "extracted_by": {"type": "object", "additionalProperties": false, "required": ["agent", "model", "tool", "prompt_ref"], "properties": {"agent": {"type": "string", "minLength": 1}, "model": {"type": "string", "minLength": 1}, "tool": {"type": ["string", "null"]}, "prompt_ref": {"type": ["string", "null"]}}},
+    "extracted_at": {"type": "string", "format": "date-time"},
+    "confidence": {"type": "string", "enum": ["low", "medium", "high"]},
+    "risk_class": {"type": "string", "enum": ["low", "medium", "high"]},
+    "status": {"type": "string", "enum": ["candidate", "rejected", "promoted", "duplicate", "needs_review"]},
+    "review": {"type": "object", "additionalProperties": false, "required": ["reviewed_by", "reviewed_at", "review_notes"], "properties": {"reviewed_by": {"type": ["string", "null"]}, "reviewed_at": {"type": ["string", "null"], "format": "date-time"}, "review_notes": {"type": ["string", "null"]}}},
+    "metadata": {"type": "object"},
+    "subject": {"type": "string", "minLength": 1},
+    "preference_text": {"type": "string", "minLength": 1},
+    "domain": {"type": "string", "enum": ["writing", "product", "investing", "architecture", "design", "communication", "operations", "personal", "other"]},
+    "scope": {"type": "string", "enum": ["global", "project_specific", "context_specific"]},
+    "strength_hint": {"type": "string", "enum": ["weak", "medium", "strong", "hard_constraint", "unknown"]},
+    "counterevidence_span_ids": {"type": "array", "items": {"type": "string", "pattern": "^span_[0-9a-f]{16,}$"}}
+  },
+  "not": {"anyOf": [{"required": ["preference_id"]}, {"required": ["promoted_at"]}, {"required": ["valid_from"]}, {"required": ["valid_until"]}, {"required": ["supersedes"]}, {"required": ["superseded_by"]}, {"required": ["project_state_id"]}]}
+}
+

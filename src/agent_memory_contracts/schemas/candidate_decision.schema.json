@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eoniclife.github.io/agent-memory-contracts/schemas/candidate_decision.schema.json",
+  "title": "CandidateDecision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "schema_version", "candidate_type", "source_record_ids", "episode_record_ids", "evidence_span_ids", "natural_language_summary", "extracted_by", "extracted_at", "confidence", "risk_class", "status", "review", "metadata", "decision_text", "decision_scope", "alternatives_mentioned", "rationale_text", "decision_time_hint", "owner_hint", "reversibility"],
+  "properties": {
+    "id": {"type": "string", "pattern": "^cand_decision_[0-9a-f]{24}$"},
+    "schema_version": {"const": "1.0.0"},
+    "candidate_type": {"const": "decision"},
+    "source_record_ids": {"type": "array", "items": {"type": "string", "pattern": "^src_[0-9a-f]{16,}$"}},
+    "episode_record_ids": {"type": "array", "items": {"type": "string", "pattern": "^ep_[0-9a-f]{16,}$"}},
+    "evidence_span_ids": {"type": "array", "minItems": 1, "items": {"type": "string", "pattern": "^span_[0-9a-f]{16,}$"}},
+    "natural_language_summary": {"type": "string", "minLength": 1},
+    "extracted_by": {"type": "object", "additionalProperties": false, "required": ["agent", "model", "tool", "prompt_ref"], "properties": {"agent": {"type": "string", "minLength": 1}, "model": {"type": "string", "minLength": 1}, "tool": {"type": ["string", "null"]}, "prompt_ref": {"type": ["string", "null"]}}},
+    "extracted_at": {"type": "string", "format": "date-time"},
+    "confidence": {"type": "string", "enum": ["low", "medium", "high"]},
+    "risk_class": {"type": "string", "enum": ["low", "medium", "high"]},
+    "status": {"type": "string", "enum": ["candidate", "rejected", "promoted", "duplicate", "needs_review"]},
+    "review": {"type": "object", "additionalProperties": false, "required": ["reviewed_by", "reviewed_at", "review_notes"], "properties": {"reviewed_by": {"type": ["string", "null"]}, "reviewed_at": {"type": ["string", "null"], "format": "date-time"}, "review_notes": {"type": ["string", "null"]}}},
+    "metadata": {"type": "object"},
+    "decision_text": {"type": "string", "minLength": 1},
+    "decision_scope": {"type": "string", "enum": ["project", "architecture", "personal", "operational", "other"]},
+    "alternatives_mentioned": {"type": "array", "items": {"type": "string"}},
+    "rationale_text": {"type": ["string", "null"]},
+    "decision_time_hint": {"type": ["string", "null"], "format": "date-time"},
+    "owner_hint": {"type": ["string", "null"]},
+    "reversibility": {"type": "string", "enum": ["low", "medium", "high", "unknown"]}
+  },
+  "not": {"anyOf": [{"required": ["decision_id"]}, {"required": ["promoted_at"]}, {"required": ["valid_from"]}, {"required": ["valid_until"]}, {"required": ["supersedes"]}, {"required": ["superseded_by"]}, {"required": ["project_state_id"]}]}
+}
+

@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eoniclife.github.io/agent-memory-contracts/schemas/episode_record.schema.json",
+  "title": "EpisodeRecord",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "schema_version",
+    "source_id",
+    "episode_type",
+    "episode_locator",
+    "title",
+    "summary",
+    "event_time_start",
+    "event_time_end",
+    "actors",
+    "topics",
+    "project_refs",
+    "evidence_span_ids",
+    "metadata"
+  ],
+  "properties": {
+    "id": {"type": "string", "pattern": "^ep_[0-9a-f]{16,}$"},
+    "schema_version": {"const": "1.0.0"},
+    "source_id": {"type": "string", "pattern": "^src_[0-9a-f]{16,}$"},
+    "episode_type": {
+      "type": "string",
+      "enum": [
+        "conversation_segment",
+        "meeting_segment",
+        "email_thread",
+        "bookmark_event",
+        "task_event",
+        "decision_event",
+        "document_section",
+        "other"
+      ]
+    },
+    "episode_locator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "value"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "ordinal",
+            "line_range",
+            "message_range",
+            "timestamp_range",
+            "page_range",
+            "section_id",
+            "synthetic_locator"
+          ]
+        },
+        "value": {"type": "string", "minLength": 1}
+      }
+    },
+    "title": {"type": "string", "minLength": 1},
+    "summary": {"type": "string", "minLength": 1},
+    "event_time_start": {"type": ["string", "null"], "format": "date-time"},
+    "event_time_end": {"type": ["string", "null"], "format": "date-time"},
+    "actors": {"type": "array", "items": {"type": "string"}},
+    "topics": {"type": "array", "items": {"type": "string"}},
+    "project_refs": {"type": "array", "items": {"type": "string"}},
+    "evidence_span_ids": {"type": "array", "items": {"type": "string", "pattern": "^span_[0-9a-f]{16,}$"}},
+    "metadata": {"type": "object"}
+  }
+}
