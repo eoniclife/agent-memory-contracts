@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "created_at": {
+      "type": "string"
+    },
+    "id": {
+      "pattern": "^tastedelta_",
+      "type": "string"
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "promotion_allowed_without_reducer": {
+      "type": "boolean"
+    },
+    "proposed_action": {
+      "type": "string"
+    },
+    "requires_reducer_decision": {
+      "type": "boolean"
+    },
+    "resolver_input_bundle_id": {
+      "type": "string"
+    },
+    "resolver_run_id": {
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "summary_redacted": {
+      "type": "string"
+    },
+    "supporting_candidate_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "supporting_intake_envelope_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "target_taste_card_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "id",
+    "schema_version",
+    "created_at",
+    "resolver_run_id",
+    "resolver_input_bundle_id",
+    "target_taste_card_ids",
+    "proposed_action",
+    "summary_redacted",
+    "supporting_intake_envelope_ids",
+    "supporting_candidate_ids",
+    "requires_reducer_decision",
+    "promotion_allowed_without_reducer",
+    "metadata"
+  ],
+  "title": "TasteDeltaProposal",
+  "type": "object"
+}

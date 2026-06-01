@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TasteReducerDecision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "schema_version",
+    "decision_type",
+    "target_taste_signal_ids",
+    "target_taste_card_ids",
+    "evidence_span_ids",
+    "rationale",
+    "decided_by",
+    "decided_at",
+    "confidence",
+    "risk_class",
+    "checks",
+    "metadata"
+  ],
+  "properties": {
+    "id": { "type": "string", "pattern": "^redtaste_[0-9a-f]{24,}$" },
+    "schema_version": { "const": "1.0.0" },
+    "decision_type": { "enum": ["promote", "reject", "supersede", "retract", "contest", "archive"] },
+    "target_taste_signal_ids": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^cand_taste_" }
+    },
+    "target_taste_card_ids": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^taste_" }
+    },
+    "evidence_span_ids": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "pattern": "^span_" }
+    },
+    "rationale": { "type": "string", "minLength": 1 },
+    "decided_by": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["agent", "model", "tool", "prompt_ref"],
+      "properties": {
+        "agent": { "type": "string", "minLength": 1 },
+        "model": { "type": "string", "minLength": 1 },
+        "tool": { "type": ["string", "null"] },
+        "prompt_ref": { "type": ["string", "null"] }
+      }
+    },
+    "decided_at": { "type": "string", "format": "date-time" },
+    "confidence": { "enum": ["low", "medium", "high"] },
+    "risk_class": { "enum": ["low", "medium", "high"] },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provenance", "specificity", "example_grounding", "contrast_grounding", "privacy", "usefulness"],
+      "properties": {
+        "provenance": { "enum": ["pass", "fail", "unknown"] },
+        "specificity": { "enum": ["pass", "fail", "unknown"] },
+        "example_grounding": { "enum": ["pass", "fail", "unknown"] },
+        "contrast_grounding": { "enum": ["pass", "fail", "unknown"] },
+        "privacy": { "enum": ["pass", "fail", "unknown"] },
+        "usefulness": { "enum": ["pass", "fail", "unknown"] }
+      }
+    },
+    "metadata": { "type": "object" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "decision_type": { "const": "reject" } } },
+      "then": { "properties": { "target_taste_card_ids": { "maxItems": 0 } } }
+    },
+    {
+      "if": { "properties": { "decision_type": { "const": "supersede" } } },
+      "then": { "properties": { "target_taste_card_ids": { "minItems": 2 } } }
+    },
+    {
+      "if": { "properties": { "decision_type": { "enum": ["retract", "contest", "archive"] } } },
+      "then": { "properties": { "target_taste_card_ids": { "minItems": 1 } } }
+    }
+  ]
+}
