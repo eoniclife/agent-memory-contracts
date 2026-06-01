@@ -1,0 +1,47 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "agent-memory-contracts"
+version: "0.1.0"
+date-released: 2026-06-01
+license: Apache-2.0
+repository-code: "https://github.com/eoniclife/agent-memory-contracts"
+abstract: >-
+  JSON Schemas and Python contracts for AI agent memory integrity:
+  evidence, candidate, ledger, taste, state, and ContextPack planes,
+  with content-derived stable IDs and per-plane bundle validators.
+  Standard-library only. Extracted from a 30+ sprint falsification-first
+  AI agent memory kernel.
+keywords:
+  - ai
+  - agents
+  - memory
+  - llm
+  - schema
+  - contracts
+  - second-brain
+  - knowledge-graph
+  - taste-cards
+  - falsification
+authors:
+  - family-names: Singh
+    given-names: Aditya
+    alias: eoniclife
+    affiliation: Eonic
+    orcid: https://orcid.org/0000-0000-0000-0000
+contact:
+  - family-names: Singh
+    given-names: Aditya
+    alias: eoniclife
+    email: avsingkernel@users.noreply.github.com
+preferred-citation:
+  type: software
+  title: "agent-memory-contracts: schema packs for AI agent memory integrity"
+  version: "0.1.0"
+  date-released: 2026-06-01
+  authors:
+    - family-names: Singh
+      given-names: Aditya
+      alias: eoniclife
+  license: Apache-2.0
+  repository-code: "https://github.com/eoniclife/agent-memory-contracts"
