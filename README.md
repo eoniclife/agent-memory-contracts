@@ -93,7 +93,7 @@ Two runnable end-to-end examples:
   of canonical JSON. Same payload = same ID, forever.
 - **Zero runtime dependencies** (stdlib only)
 - **~2,500 lines of Python**, ~600 lines of JSON Schema
-- **49 tests** covering id derivation, contract validation, bundle
+- **61 tests** covering id derivation, contract validation, bundle
   integrity, and temporal queries
 
 ## Design principles
@@ -143,7 +143,7 @@ Requires Python 3.10+. No runtime dependencies.
 
 ```bash
 pip install -e ".[dev]"
-pytest -q                            # 49 tests
+pytest -q                            # 61 tests
 PYTHONPATH=src python examples/quickstart.py
 PYTHONPATH=src python examples/extract_taste_cards.py
 ```
