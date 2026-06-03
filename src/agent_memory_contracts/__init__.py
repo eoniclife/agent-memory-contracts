@@ -102,8 +102,9 @@ from .contextpack_ids import (
     make_context_pack_validation_report_id,
 )
 from .contextpack_validation import validate_contextpack_bundle
+from .bundles import bundle_fingerprint
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 __all__ = [
     # Evidence plane
@@ -176,4 +177,5 @@ __all__ = [
     "context_pack_build_receipt_from_dict",
     "context_pack_validation_report_from_dict",
     "validate_contextpack_bundle",
+    "bundle_fingerprint",
 ]

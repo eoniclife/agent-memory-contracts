@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-06-03
+
+### Added
+
+- New module `agent_memory_contracts.bundles` with one public
+  function `bundle_fingerprint(records, *, id_field="id")`. Returns
+  a deterministic SHA-256 hex digest of a set of records,
+  content-sensitive, order-insensitive, set-semantic.
+  - Records can be dicts, Mappings, or dataclass instances.
+  - Records with the same ``id_field`` value are deduplicated
+    before hashing (last write wins).
+  - Records are sorted by id before concatenation; the separator
+    is a newline, which is safe because canonical JSON cannot
+    contain an unescaped newline inside a string.
+  - Stdlib only -- reuses the same `sha256_hex` primitive the
+    id helpers already use.
+  - Use cases: cache key, idempotency token, change-detection
+    digest, audit-chain anchor.
+- 14 new test methods in `tests/test_bundles.py` covering:
+  - Determinism (same input -> same hash; empty bundle is
+    deterministic; 64 lowercase hex format).
+  - Order insensitivity (reversed, shuffled, single element).
+  - Content sensitivity (value change, add, remove, rename id,
+    key reorder still matches).
+  - Dedup by id (duplicate same content collapses; duplicate
+    different content -- last write wins, deterministic for
+    input order).
+  - Dict-dataclass equivalence (a bundle of dataclass instances
+    and a bundle of equivalent dicts hash to the same value).
+  - Idempotency (re-running the same pipeline produces the
+    same hash).
+  - Real-world integration (uses `SourceRecord.from_dict` and
+    `PreferenceLedgerEntry.from_dict` end-to-end).
+  - Custom `id_field` (works for records named with a slug
+    instead of ``id``).
+- README section "Bundle fingerprint" with a worked example.
+- README "What's in the box" lists the new primitive and bumps
+  the test count to 75.
+
 ## [0.2.0] - 2026-06-03
 
 ### Added

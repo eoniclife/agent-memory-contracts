@@ -84,17 +84,26 @@ Two runnable end-to-end examples:
 ## What's in the box
 
 - **23 JSON Schemas** (Draft 2020-12) in `src/agent_memory_contracts/schemas/`
-- **14 Python modules** of `frozen=True` dataclasses and validators
+- **15 Python modules** of `frozen=True` dataclasses and validators
 - **5 bundle validators** that reject the bundle on dangling references,
   non-reciprocal supersession, candidate/ledger field leakage, and
   reducer authorization mismatch
 - **10 temporal query helpers** for the taste and state planes
 - **Content-derived ID helpers** for every record type, using SHA-256
   of canonical JSON. Same payload = same ID, forever.
+- **`bundle_fingerprint(records)`** for content-addressed bundle digests.
+  Set-semantic, order-insensitive, last-write-wins on duplicate ids.
+  Same primitive the id helpers use, applied to the bundle as a
+  whole. Useful as a cache key, idempotency token, or change-detection
+  digest.
+- **Opt-in `jsonschema` validator** (`pip install agent-memory-contracts[jsonschema]`)
+  for polyglot producers that want to validate Python dataclasses
+  against the bundled JSON Schemas before the record leaves the
+  producing system.
 - **Zero runtime dependencies** (stdlib only)
-- **~2,500 lines of Python**, ~600 lines of JSON Schema
-- **61 tests** covering id derivation, contract validation, bundle
-  integrity, and temporal queries
+- **~2,800 lines of Python**, ~600 lines of JSON Schema
+- **75 tests** covering id derivation, contract validation, bundle
+  integrity, temporal queries, and the bundle fingerprint primitive
 
 ## Design principles
 
@@ -122,6 +131,41 @@ the alternative is a runtime bug you'll only catch in production.
    task-ready bundle; it carries a `BuildReceipt` (what was selected)
    and a `ValidationReport` (what passed). The receipt, not the
    context pack, is the audit trail.
+6. **Bundles are content-addressed.** `bundle_fingerprint(records)`
+   returns a deterministic SHA-256 of the whole bundle, set-
+   semantic and order-insensitive. Same records in any order,
+   same fingerprint. A bundle is treated as a set of records
+   keyed by ``id``; duplicate ids are collapsed (last write wins)
+   before hashing.
+
+## Bundle fingerprint
+
+Since 0.3.0, the library ships a `bundle_fingerprint` primitive
+that hashes a set of records into a single 64-char hex digest.
+The same records in any order produce the same hash; any byte
+change in any record changes the hash.
+
+```python
+from agent_memory_contracts import bundle_fingerprint
+
+records = [source_record, evidence_span, taste_card, ...]
+digest = bundle_fingerprint(records)
+# '4f3a2b1c...'  (64 hex chars; SHA-256 of canonical-JSON bundle)
+
+# Re-running the same pipeline on the same records gives the
+# same digest, so a downstream write layer can dedupe on it.
+assert bundle_fingerprint(records) == digest
+
+# A bundle of dataclass instances and a bundle of equivalent
+# dicts hash to the same value -- the canonical form is the
+# same in both cases.
+assert bundle_fingerprint(records) == bundle_fingerprint(
+    [dataclasses.asdict(r) for r in records]
+)
+```
+
+Use cases: cache key for ContextPack rebuilds, idempotency token
+for sync writes, change-detection digest, audit-chain anchor.
 
 ## Install
 
@@ -143,7 +187,7 @@ Requires Python 3.10+. No runtime dependencies.
 
 ```bash
 pip install -e ".[dev]"
-pytest -q                            # 61 tests
+pytest -q                            # 75 tests
 PYTHONPATH=src python examples/quickstart.py
 PYTHONPATH=src python examples/extract_taste_cards.py
 ```
