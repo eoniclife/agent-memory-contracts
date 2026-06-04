@@ -18,14 +18,17 @@ from agent_memory_contracts import (
 )
 
 # Probe the optional dep once at import time. Tests that need it
-# are wrapped in @unittest.skipUnless.
+# are wrapped in @unittest.skipUnless. The jsonschema_validator
+# module itself is always importable (graceful degradation is
+# the design), so we import it unconditionally; only the
+# `jsonschema` symbol is gated.
 try:
     import jsonschema  # noqa: F401
-    from agent_memory_contracts import jsonschema_validator as jv
     HAS_JSONSCHEMA = True
 except ImportError:
     HAS_JSONSCHEMA = False
-    jv = None  # type: ignore[assignment]
+
+from agent_memory_contracts import jsonschema_validator as jv
 
 
 def _valid_source_dict() -> dict:
