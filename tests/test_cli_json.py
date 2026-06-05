@@ -86,12 +86,192 @@ class CLINoArgsJSONTests(unittest.TestCase):
 
 
 class CLIHelpJSONTests(unittest.TestCase):
-    """``--help`` describes the ``--json`` flag."""
+    """``--help`` describes the ``--json`` flag at every level."""
 
-    def test_help_mentions_json_flag(self):
+    def test_top_level_help_mentions_json_flag(self):
         r = _run(["--help"])
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("--json", r.stdout)
+
+    def test_validate_help_mentions_json_flag(self):
+        r = _run(["validate", "--help"])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("--json", r.stdout)
+
+    def test_fingerprint_help_mentions_json_flag(self):
+        r = _run(["fingerprint", "--help"])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("--json", r.stdout)
+
+    def test_diff_help_mentions_json_flag(self):
+        r = _run(["diff", "--help"])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("--json", r.stdout)
+
+
+class CLIJSONPositionTests(unittest.TestCase):
+    """``--json`` works in either position (before or after the subcommand).
+
+    These tests guard against the silent data-handling bug where
+    argparse's long-option prefix matching would absorb ``--json``
+    into the existing ``--jsonl`` flag whenever the user put it
+    after the subcommand name. With ``allow_abbrev=False`` enabled
+    on the top-level parser, ``--json`` is now an exact match and
+    cannot be silently reinterpreted.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmpdir = Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _write_json(self, name: str, data) -> Path:
+        p = self.tmpdir / name
+        p.write_text(json.dumps(data), encoding="utf-8")
+        return p
+
+    @unittest.skipUnless(HAS_JSONSCHEMA, "jsonschema not installed")
+    def test_validate_json_after_subcommand_works(self):
+        """`validate --json file.json ...` must not be absorbed into --jsonl."""
+        path = self._write_json("valid.json", _valid_source_dict())
+        # CRITICAL: the prefix-matching bug caused --json AFTER the
+        # subcommand to be silently reinterpreted as --jsonl, which
+        # then mis-parsed the JSON file as JSONL (or accepted it
+        # silently with no validation). With allow_abbrev=False the
+        # flag is an exact match and the user gets the JSON output
+        # they asked for.
+        r = _run(
+            ["validate", "--json", str(path), "--schema", "source_record"]
+        )
+        self.assertEqual(r.returncode, 0, r.stderr)
+        payload = json.loads(r.stdout)
+        self.assertEqual(payload["ok"], True)
+        self.assertEqual(payload["mode"], "json")
+        self.assertEqual(payload["errors"], [])
+
+    @unittest.skipUnless(HAS_JSONSCHEMA, "jsonschema not installed")
+    def test_validate_json_before_subcommand_still_works(self):
+        """Regression: the pre-existing --json BEFORE form must keep working."""
+        path = self._write_json("valid.json", _valid_source_dict())
+        r = _run(
+            ["--json", "validate", str(path), "--schema", "source_record"]
+        )
+        self.assertEqual(r.returncode, 0, r.stderr)
+        payload = json.loads(r.stdout)
+        self.assertEqual(payload["ok"], True)
+        self.assertEqual(payload["mode"], "json")
+
+    @unittest.skipUnless(HAS_JSONSCHEMA, "jsonschema not installed")
+    def test_validate_jsonl_explicit_still_works(self):
+        """Regression: explicit --jsonl must still be accepted (no abbreviation)."""
+        rec = _valid_source_dict()
+        path = self.tmpdir / "valid.jsonl"
+        path.write_text(
+            json.dumps(rec) + "\n" + json.dumps(rec) + "\n",
+            encoding="utf-8",
+        )
+        r = _run(
+            ["validate", "--jsonl", str(path), "--schema", "source_record"]
+        )
+        self.assertEqual(r.returncode, 0, r.stderr)
+        # The default (non-JSON) success path is silent on stdout,
+        # so the only thing to check here is the exit code and the
+        # absence of an error.
+        self.assertEqual(r.stderr, "")
+
+    def test_prefix_ambiguity_is_rejected(self):
+        """`--js` (a non-unique prefix) must be rejected, not silently expanded.
+
+        The original bug was the inverse: --json got silently expanded
+        to --jsonl. allow_abbrev=False flips that to "reject on
+        ambiguity", which is the safe direction.
+        """
+        r = _run(
+            ["validate", "--js", "irrelevant", "--schema", "source_record"]
+        )
+        # argparse exits 2 on a usage error.
+        self.assertEqual(r.returncode, 2)
+        # The error message should mention the ambiguity.
+        self.assertIn("ambiguous", r.stderr.lower())
+
+    def test_fingerprint_json_after_subcommand_works(self):
+        a = self._write_json("a.json", [{"id": "x", "v": 1}])
+        r = _run(["fingerprint", "--json", str(a)])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        payload = json.loads(r.stdout)
+        self.assertEqual(payload["ok"], True)
+        self.assertEqual(len(payload["fingerprint"]), 64)
+
+    def test_diff_json_after_subcommand_works(self):
+        a = self._write_json("a.json", [{"id": "x", "v": 1}])
+        b = self._write_json("b.json", [{"id": "x", "v": 2}])
+        r = _run(["diff", "--json", str(a), str(b)])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        payload = json.loads(r.stdout)
+        self.assertEqual(payload["ok"], True)
+        self.assertEqual(len(payload["changed"]), 1)
+
+
+class CLIJSONKeyOrderTests(unittest.TestCase):
+    """JSON output keys are in spec order (``ok`` first, ``errors`` last).
+
+    The spec writes the validate envelope as
+    ``{ok, schema, path, mode, errors}`` and the fingerprint envelope
+    as ``{ok, path, fingerprint, record_count}``. ``_emit_json`` uses
+    insertion order (no sort_keys) so callers can rely on a stable
+    on-the-wire key order.
+
+    JSON objects are unordered by RFC 8259, but a stable insertion
+    order helps humans read raw output and lets tests assert on the
+    exact wire shape.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmpdir = Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _write_json(self, name: str, data) -> Path:
+        p = self.tmpdir / name
+        p.write_text(json.dumps(data), encoding="utf-8")
+        return p
+
+    @unittest.skipUnless(HAS_JSONSCHEMA, "jsonschema not installed")
+    def test_validate_json_key_order_matches_spec(self):
+        path = self._write_json("v.json", _valid_source_dict())
+        r = _run(
+            ["--json", "validate", str(path), "--schema", "source_record"]
+        )
+        self.assertEqual(r.returncode, 0, r.stderr)
+        # Parse without ``object_pairs_hook`` to get the regular
+        # dict, then assert the insertion-order keys match the spec.
+        self.assertEqual(
+            list(json.loads(r.stdout).keys()),
+            ["ok", "schema", "path", "mode", "errors"],
+        )
+
+    def test_fingerprint_json_key_order_matches_spec(self):
+        path = self._write_json("b.json", [{"id": "a", "v": 1}])
+        r = _run(["--json", "fingerprint", str(path)])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(
+            list(json.loads(r.stdout).keys()),
+            ["ok", "path", "fingerprint", "record_count"],
+        )
+
+    def test_diff_json_key_order_matches_spec(self):
+        a = self._write_json("a.json", [{"id": "x", "v": 1}])
+        b = self._write_json("b.json", [{"id": "x", "v": 2}])
+        r = _run(["--json", "diff", str(a), str(b)])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(
+            list(json.loads(r.stdout).keys()),
+            ["ok", "added", "removed", "changed", "unchanged_count"],
+        )
 
 
 # ---------------------------------------------------------------------------
