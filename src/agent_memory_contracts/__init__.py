@@ -104,7 +104,7 @@ from .contextpack_ids import (
 from .contextpack_validation import validate_contextpack_bundle
 from .bundles import bundle_fingerprint
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 __all__ = [
     # Evidence plane

@@ -84,7 +84,7 @@ Two runnable end-to-end examples:
 ## What's in the box
 
 - **23 JSON Schemas** (Draft 2020-12) in `src/agent_memory_contracts/schemas/`
-- **15 Python modules** of `frozen=True` dataclasses and validators
+- **17 Python modules** of `frozen=True` dataclasses and validators
 - **5 bundle validators** that reject the bundle on dangling references,
   non-reciprocal supersession, candidate/ledger field leakage, and
   reducer authorization mismatch
@@ -96,13 +96,22 @@ Two runnable end-to-end examples:
   Same primitive the id helpers use, applied to the bundle as a
   whole. Useful as a cache key, idempotency token, or change-detection
   digest.
+- **`bundle_diff(a, b)`** for set-semantic diff between two bundles.
+  Returns a `BundleDiff(added, removed, changed, unchanged_count)`
+  with full pre/post records for the changed entries. Short-circuits
+  via `bundle_fingerprint` when both bundles hash equal, so the
+  "no changes" case is one hash comparison.
 - **Opt-in `jsonschema` validator** (`pip install agent-memory-contracts[jsonschema]`)
   for polyglot producers that want to validate Python dataclasses
   against the bundled JSON Schemas before the record leaves the
-  producing system.
+  producing system. Includes `validate_jsonl` and
+  `iter_validated_jsonl` for streaming.
+- **CLI** (`python -m agent_memory_contracts`) for the non-Python
+  use case: validate a JSON or JSONL file against a schema, compute
+  a bundle fingerprint, diff two bundles. Stdlib `argparse`.
 - **Zero runtime dependencies** (stdlib only)
-- **~2,800 lines of Python**, ~600 lines of JSON Schema
-- **75 tests** covering id derivation, contract validation, bundle
+- **~3,400 lines of Python**, ~600 lines of JSON Schema
+- **139 tests** covering id derivation, contract validation, bundle
   integrity, temporal queries, and the bundle fingerprint primitive
 
 ## Design principles
@@ -140,6 +149,8 @@ the alternative is a runtime bug you'll only catch in production.
 
 ## Bundle fingerprint
 
+(Since 0.3.0 — see also [Bundle diff](#bundle-diff) and [CLI](#cli) below.)
+
 Since 0.3.0, the library ships a `bundle_fingerprint` primitive
 that hashes a set of records into a single 64-char hex digest.
 The same records in any order produce the same hash; any byte
@@ -167,6 +178,63 @@ assert bundle_fingerprint(records) == bundle_fingerprint(
 Use cases: cache key for ContextPack rebuilds, idempotency token
 for sync writes, change-detection digest, audit-chain anchor.
 
+## Bundle diff
+
+Since 0.4.0. `bundle_diff(a, b)` returns a `BundleDiff(added, removed,
+changed, unchanged_count)` describing the set-semantic difference
+between two bundles. Same primitive the id helpers use, applied to
+"what changed between bundle A and bundle B":
+
+```python
+from agent_memory_contracts import bundle_diff, BundleDiff
+from dataclasses import asdict
+
+diff = bundle_diff(bundle_a, bundle_b)
+print(diff.added, diff.removed, len(diff.changed), diff.unchanged_count)
+
+# When both bundles hash to the same fingerprint, the function
+# short-circuits and returns the empty diff without iterating
+# records. The common "no changes" case is one hash comparison.
+```
+
+For the non-Python case, the CLI exposes the same primitive:
+
+```bash
+python -m agent_memory_contracts diff bundle-a.json bundle-b.json
+# 1 added, 0 removed, 0 changed, 12 unchanged
+# + src_new_id
+```
+
+Use cases: cache invalidation ("did this rebuild's inputs change?"),
+audit chains ("what changed in the last cycle?"), UI rendering of
+diffs in a ContextPack inspector.
+
+## CLI
+
+Since 0.4.0. The library is usable from the command line without
+writing Python. Stdlib `argparse`, no extra dependencies:
+
+```bash
+# Validate a JSON or JSONL file against one of the bundled schemas.
+python -m agent_memory_contracts validate records.json --schema taste_card
+python -m agent_memory_contracts validate records.jsonl --schema source_record --jsonl
+
+# Content-addressed digest of a bundle (JSON or JSONL).
+python -m agent_memory_contracts fingerprint bundle.json
+# 4f3a2b1c...   (64 hex chars)
+
+# Diff two bundles.
+python -m agent_memory_contracts diff before.json after.json
+
+# Misc.
+python -m agent_memory_contracts --help
+python -m agent_memory_contracts --version
+```
+
+Exit codes: 0 on success, 1 on validation error, 2 on usage error.
+The CLI uses the same public Python API as the library, so anything
+you can do from Python you can do from the shell.
+
 ## Install
 
 ```bash
@@ -187,7 +255,7 @@ Requires Python 3.10+. No runtime dependencies.
 
 ```bash
 pip install -e ".[dev]"
-pytest -q                            # 75 tests
+pytest -q                            # 139 tests
 PYTHONPATH=src python examples/quickstart.py
 PYTHONPATH=src python examples/extract_taste_cards.py
 ```

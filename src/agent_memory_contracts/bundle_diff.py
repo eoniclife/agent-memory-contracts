@@ -15,10 +15,10 @@ returned without iterating any records.
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass, field, is_dataclass
-from typing import Any, Iterable, Mapping
+from dataclasses import dataclass, field
+from typing import Any, Iterable
 
-from .bundles import bundle_fingerprint
+from .bundles import _canonical_record, bundle_fingerprint
 
 
 @dataclass(frozen=True)
@@ -39,40 +39,6 @@ class BundleDiff:
     removed: list[dict] = field(default_factory=list)
     changed: list[tuple[dict, dict]] = field(default_factory=list)
     unchanged_count: int = 0
-
-
-def _record_to_dict(record: Any) -> dict:
-    """Convert a record to a plain dict for use in BundleDiff fields.
-
-    Dataclass instances are flattened via ``asdict``.  Mappings are
-    copied.  Anything else is coerced via the Mapping protocol.
-    """
-    if is_dataclass(record) and not isinstance(record, type):
-        return asdict(record)
-    elif isinstance(record, Mapping):
-        return dict(record)
-    else:
-        return dict(record)  # type: ignore[arg-type]
-
-
-def _canonical_record(record: Any, id_field: str) -> tuple[str, str]:
-    """Return ``(id_value, canonical_json)`` for a single record."""
-    if is_dataclass(record) and not isinstance(record, type):
-        rec_dict = asdict(record)
-        id_value = getattr(record, id_field, "")
-    elif isinstance(record, Mapping):
-        rec_dict = dict(record)
-        id_value = rec_dict.get(id_field, "")
-    else:
-        rec_dict = dict(record)  # type: ignore[arg-type]
-        id_value = rec_dict.get(id_field, "")
-    canonical = json.dumps(
-        rec_dict,
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=False,
-    )
-    return str(id_value), canonical
 
 
 def bundle_diff(

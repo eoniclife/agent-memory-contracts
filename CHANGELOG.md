@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-06-05
+
+### Added
+
+- New module `agent_memory_contracts.bundle_diff` with one public
+  function `bundle_diff(a, b, *, id_field="id") -> BundleDiff`. The
+  result is a frozen dataclass with `added`, `removed`, `changed`,
+  and `unchanged_count` fields. Set-semantic (order-insensitive,
+  duplicate-ids collapse last-write-wins, dict-dataclass equivalent).
+  Short-circuits via `bundle_fingerprint` when both bundles hash
+  equal, so the common case (no changes) is a single hash
+  comparison without iterating records.
+- New module `agent_memory_contracts.__main__` exposing
+  `python -m agent_memory_contracts` with three subcommands:
+  - `validate <path> --schema <name> [--jsonl]`
+  - `fingerprint <path>`
+  - `diff <path-a> <path-b>`
+  - `--help`, `--version`, sensible exit codes (0 on success, 1 on
+    validation error, 2 on usage error). Stdlib `argparse` only.
+- New functions on `agent_memory_contracts.jsonschema_validator`:
+  - `validate_jsonl(path, schema_name, *, raise_on_error=True)`
+    validates a JSONL file and returns per-line error messages.
+  - `iter_validated_jsonl(path, schema_name)` is a generator that
+    yields `(line_number, instance_or_errors)` for streaming use.
+  Both are gated behind the existing `[jsonschema]` extra.
+- 53 new tests across three new test files (test_bundle_diff.py,
+  test_cli.py) and the extended test_jsonschema_validator.py. The
+  full suite is 139 passed + 1 expected skip on Python 3.10/3.11/3.12.
+
+### Changed
+
+- `bundle_diff.py` now imports `_canonical_record` from
+  `agent_memory_contracts.bundles` instead of duplicating the
+  helper locally. Single source of truth for the canonical-JSON
+  record representation.
+
 ## [0.3.0] - 2026-06-03
 
 ### Added
