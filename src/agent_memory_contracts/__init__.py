@@ -103,6 +103,7 @@ from .contextpack_ids import (
 )
 from .contextpack_validation import validate_contextpack_bundle
 from .bundles import bundle_fingerprint
+from .merge import BundleMerge, merge_bundles
 
 __version__ = "0.4.0"
 
@@ -177,5 +178,8 @@ __all__ = [
     "context_pack_build_receipt_from_dict",
     "context_pack_validation_report_from_dict",
     "validate_contextpack_bundle",
+    # Bundle operations
     "bundle_fingerprint",
+    "BundleMerge",
+    "merge_bundles",
 ]
