@@ -8,8 +8,11 @@ the Python contract validation.
 
 from __future__ import annotations
 
+import json
+import tempfile
 import unittest
 from dataclasses import asdict
+from pathlib import Path
 
 from agent_memory_contracts import (
     SourceRecord,
@@ -244,6 +247,213 @@ class MissingDependencyTests(unittest.TestCase):
         msg = str(ctx.exception)
         self.assertIn("jsonschema", msg)
         self.assertIn("pip install", msg)
+
+
+@unittest.skipUnless(HAS_JSONSCHEMA, "jsonschema not installed")
+class JsonLinesTests(unittest.TestCase):
+    """Tests for the streaming JSONL validators.
+
+    These cover the two new public functions:
+
+    - :func:`agent_memory_contracts.jsonschema_validator.validate_jsonl`
+    - :func:`agent_memory_contracts.jsonschema_validator.iter_validated_jsonl`
+
+    All tests use a temp directory to avoid touching the working tree.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmpdir = Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _write(self, name: str, content: str) -> Path:
+        path = self.tmpdir / name
+        path.write_text(content, encoding="utf-8")
+        return path
+
+    def test_file_not_found_raises(self):
+        missing = self.tmpdir / "does_not_exist.jsonl"
+        with self.assertRaises(FileNotFoundError):
+            jv.validate_jsonl(missing, "source_record")
+
+    def test_empty_file_returns_empty_and_yields_nothing(self):
+        path = self._write("empty.jsonl", "")
+        self.assertEqual(
+            jv.validate_jsonl(path, "source_record"), [],
+        )
+        self.assertEqual(
+            list(jv.iter_validated_jsonl(path, "source_record")), [],
+        )
+
+    def test_all_valid_returns_empty_and_yields_dicts(self):
+        rec1 = _valid_source_dict()
+        rec2 = _valid_source_dict()
+        # Same id is fine; we just need two well-formed records.
+        content = json.dumps(rec1) + "\n" + json.dumps(rec2) + "\n"
+        path = self._write("all_valid.jsonl", content)
+
+        self.assertEqual(
+            jv.validate_jsonl(path, "source_record"), [],
+        )
+
+        gen = list(jv.iter_validated_jsonl(path, "source_record"))
+        self.assertEqual(len(gen), 2)
+        # Line numbers are 1-indexed, in file order.
+        self.assertEqual(gen[0][0], 1)
+        self.assertEqual(gen[1][0], 2)
+        # On success the second element is the parsed dict.
+        for _line_number, payload in gen:
+            self.assertIsInstance(payload, dict)
+            self.assertEqual(payload["source_type"], "chatgpt_conversation")
+
+    def test_one_invalid_reports_with_line_number(self):
+        good = _valid_source_dict()
+        bad = dict(good)
+        del bad["title"]  # remove a required field
+        content = json.dumps(good) + "\n" + json.dumps(bad) + "\n"
+        path = self._write("one_bad.jsonl", content)
+
+        errors = jv.validate_jsonl(
+            path, "source_record", raise_on_error=False,
+        )
+        self.assertEqual(len(errors), 1)
+        line_number, msgs = errors[0]
+        self.assertEqual(line_number, 2)
+        self.assertTrue(
+            any("title" in m for m in msgs),
+            f"expected a 'title' error, got: {msgs}",
+        )
+
+    def test_raise_on_error_true_raises_with_line_in_message(self):
+        good = _valid_source_dict()
+        bad = dict(good)
+        del bad["title"]
+        content = json.dumps(good) + "\n" + json.dumps(bad) + "\n"
+        path = self._write("raise.jsonl", content)
+
+        with self.assertRaises(jsonschema.ValidationError) as ctx:
+            jv.validate_jsonl(path, "source_record", raise_on_error=True)
+        self.assertIn(
+            "line 2", str(ctx.exception),
+            f"expected 'line 2' in the error message, got: {ctx.exception}",
+        )
+
+    def test_mixed_valid_and_invalid_reports_only_failing_lines(self):
+        good = _valid_source_dict()
+        bad = dict(good)
+        del bad["title"]
+        # 4 lines: good, bad, good, bad -- errors should be lines 2 and 4.
+        content = (
+            json.dumps(good) + "\n"
+            + json.dumps(bad) + "\n"
+            + json.dumps(good) + "\n"
+            + json.dumps(bad) + "\n"
+        )
+        path = self._write("mixed.jsonl", content)
+
+        errors = jv.validate_jsonl(
+            path, "source_record", raise_on_error=False,
+        )
+        self.assertEqual(len(errors), 2)
+        self.assertEqual(errors[0][0], 2)
+        self.assertEqual(errors[1][0], 4)
+        # Both error entries should mention 'title'.
+        for _line_number, msgs in errors:
+            self.assertTrue(
+                any("title" in m for m in msgs),
+                f"expected 'title' in error messages, got: {msgs}",
+            )
+
+    def test_malformed_json_yields_parse_error(self):
+        good = _valid_source_dict()
+        # A line that is not valid JSON: missing closing brace and
+        # colon in the wrong place.
+        content = (
+            json.dumps(good) + "\n"
+            + "{this is not valid json" + "\n"
+            + json.dumps(good) + "\n"
+        )
+        path = self._write("malformed.jsonl", content)
+
+        errors = jv.validate_jsonl(
+            path, "source_record", raise_on_error=False,
+        )
+        self.assertEqual(len(errors), 1)
+        line_number, msgs = errors[0]
+        self.assertEqual(line_number, 2)
+        # One parse error, with the JSONDecodeError reason in the message.
+        self.assertEqual(len(msgs), 1)
+        self.assertIn("invalid JSON", msgs[0])
+
+    def test_iter_yields_in_file_order_with_correct_payload_types(self):
+        good = _valid_source_dict()
+        bad = dict(good)
+        del bad["title"]
+        content = (
+            json.dumps(good) + "\n"
+            + json.dumps(bad) + "\n"
+            + json.dumps(good) + "\n"
+        )
+        path = self._write("order.jsonl", content)
+
+        results = list(jv.iter_validated_jsonl(path, "source_record"))
+        self.assertEqual(len(results), 3)
+
+        # Line 1: valid -> dict
+        self.assertEqual(results[0][0], 1)
+        self.assertIsInstance(results[0][1], dict)
+
+        # Line 2: validation error -> list of messages
+        self.assertEqual(results[1][0], 2)
+        self.assertIsInstance(results[1][1], list)
+        self.assertTrue(
+            any("title" in m for m in results[1][1]),
+            f"expected 'title' in error list, got: {results[1][1]}",
+        )
+
+        # Line 3: valid -> dict
+        self.assertEqual(results[2][0], 3)
+        self.assertIsInstance(results[2][1], dict)
+
+    def test_error_message_includes_line_number(self):
+        good = _valid_source_dict()
+        bad = dict(good)
+        del bad["title"]
+        # Validation error path: 'line N:' prefix in the raised message.
+        v_path = self._write("line_num_validate.jsonl", json.dumps(bad) + "\n")
+        with self.assertRaises(jsonschema.ValidationError) as ctx:
+            jv.validate_jsonl(v_path, "source_record", raise_on_error=True)
+        self.assertIn(
+            "line 1", str(ctx.exception),
+            f"expected 'line 1' in the validation error message, "
+            f"got: {ctx.exception}",
+        )
+
+        # Parse error path: the yielded/returned message has 'line N'
+        # and the JSONDecodeError reason.
+        p_path = self._write("line_num_parse.jsonl", "{not json\n")
+        errors = jv.validate_jsonl(
+            p_path, "source_record", raise_on_error=False,
+        )
+        self.assertEqual(len(errors), 1)
+        line_number, msgs = errors[0]
+        self.assertEqual(line_number, 1)
+        self.assertTrue(
+            msgs[0].startswith("line 1:"),
+            f"expected message to start with 'line 1:', got: {msgs[0]!r}",
+        )
+        self.assertIn("invalid JSON", msgs[0])
+
+    def test_str_path_works(self):
+        # The public API accepts both str and Path; the type hint
+        # says 'str | Path' and we should not require callers to
+        # pre-wrap the path in Path().
+        rec = _valid_source_dict()
+        path = self._write("str_path.jsonl", json.dumps(rec) + "\n")
+        errors = jv.validate_jsonl(str(path), "source_record")
+        self.assertEqual(errors, [])
 
 
 if __name__ == "__main__":

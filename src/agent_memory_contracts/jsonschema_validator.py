@@ -37,7 +37,8 @@ from __future__ import annotations
 
 import json
 from importlib import resources
-from typing import Any, Iterable, Mapping
+from pathlib import Path
+from typing import Any, Iterable, Iterator, Mapping
 
 try:
     import jsonschema  # type: ignore[import-not-found]
@@ -233,11 +234,128 @@ def validate_bundle(
     return errors
 
 
+def validate_jsonl(
+    path: str | Path,
+    schema_name: str,
+    *,
+    raise_on_error: bool = True,
+) -> list[tuple[int, list[str]]]:
+    """Validate a JSONL file line-by-line against one of the bundled JSON Schemas.
+
+    Each line of the file is treated as a single JSON value and validated
+    against ``schema_name``. Lines that fail to parse or fail validation
+    are collected (with their 1-indexed line number) and returned.
+
+    Args:
+        path: Path to the JSONL file. Each non-empty line should be a
+            complete JSON value.
+        schema_name: The schema to validate every parsed record against.
+        raise_on_error: If True (the default), raise
+            :class:`jsonschema.ValidationError` on the first error,
+            with the offending line number in the message
+            (``"line N: <reason>"``). If False, validate every line
+            and return a list of ``(line_number, error_messages)``
+            tuples for every line that produced an error (parse or
+            validation).
+
+    Returns:
+        A list of ``(line_number, error_messages)`` tuples, one per
+        line that produced at least one error. Empty when the file
+        is fully valid (and ``raise_on_error`` is False).
+
+    Raises:
+        FileNotFoundError: if ``path`` does not exist.
+        SchemaNotFoundError: if ``schema_name`` is not known.
+        ImportError: if ``jsonschema`` is not installed.
+        jsonschema.ValidationError: on the first error if
+            ``raise_on_error`` is True. The message is prefixed with
+            ``"line N: "``.
+    """
+    _require_jsonschema()
+    errors: list[tuple[int, list[str]]] = []
+    with open(path, "r", encoding="utf-8") as fh:
+        for line_number, raw in enumerate(fh, start=1):
+            line = raw.rstrip("\n").rstrip("\r")
+            try:
+                instance = json.loads(line)
+            except json.JSONDecodeError as exc:
+                msg = f"line {line_number}: invalid JSON: {exc}"
+                errors.append((line_number, [msg]))
+                if raise_on_error:
+                    raise jsonschema.ValidationError(  # type: ignore[union-attr]
+                        msg
+                    )
+                continue
+            line_errors = validate_instance(
+                instance, schema_name, raise_on_error=False
+            )
+            if line_errors:
+                errors.append((line_number, line_errors))
+                if raise_on_error:
+                    raise jsonschema.ValidationError(  # type: ignore[union-attr]
+                        f"line {line_number}: {line_errors[0]}"
+                    )
+    return errors
+
+
+def iter_validated_jsonl(
+    path: str | Path,
+    schema_name: str,
+) -> Iterator[tuple[int, dict | list[str]]]:
+    """Yield one tuple per line of a JSONL file, validated against a bundled schema.
+
+    The second element of each yielded tuple is either the parsed
+    record (when the line is valid JSON AND validates against
+    ``schema_name``) or a list of error message strings (one entry
+    for a parse error, multiple for validation errors).
+
+    This function never raises on JSON or validation errors; the
+    caller decides what to do with the yielded error lists. It will
+    raise on missing files, unknown schema names, and the missing
+    ``jsonschema`` dependency.
+
+    Args:
+        path: Path to the JSONL file.
+        schema_name: The schema to validate every parsed record against.
+
+    Yields:
+        ``(line_number, payload)`` tuples, 1-indexed. ``payload`` is
+        a dict on success, or a list of error message strings on
+        failure (parse or validation).
+
+    Raises:
+        FileNotFoundError: if ``path`` does not exist.
+        SchemaNotFoundError: if ``schema_name`` is not known.
+        ImportError: if ``jsonschema`` is not installed.
+    """
+    _require_jsonschema()
+    with open(path, "r", encoding="utf-8") as fh:
+        for line_number, raw in enumerate(fh, start=1):
+            line = raw.rstrip("\n").rstrip("\r")
+            try:
+                instance = json.loads(line)
+            except json.JSONDecodeError as exc:
+                yield (
+                    line_number,
+                    [f"line {line_number}: invalid JSON: {exc}"],
+                )
+                continue
+            line_errors = validate_instance(
+                instance, schema_name, raise_on_error=False
+            )
+            if line_errors:
+                yield (line_number, line_errors)
+            else:
+                yield (line_number, instance)
+
+
 __all__ = [
     "VALID_SCHEMA_NAMES",
     "SchemaNotFoundError",
     "is_available",
+    "iter_validated_jsonl",
     "load_schema",
-    "validate_instance",
     "validate_bundle",
+    "validate_instance",
+    "validate_jsonl",
 ]
