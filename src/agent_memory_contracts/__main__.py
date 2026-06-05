@@ -21,6 +21,14 @@ Usage::
     python -m agent_memory_contracts validate path/to/records.jsonl --jsonl --schema source_record
     python -m agent_memory_contracts fingerprint path/to/bundle.json
     python -m agent_memory_contracts diff before.json after.json
+    python -m agent_memory_contracts --json validate path/to/record.json --schema source_record
+    python -m agent_memory_contracts --json fingerprint path/to/bundle.json
+    python -m agent_memory_contracts --json diff before.json after.json
+
+When ``--json`` is set, every subcommand emits a single JSON object to
+stdout (and a separate JSON object to stderr on failure), so callers
+can ``json.loads()`` the result regardless of exit code. The
+human-readable text output is unchanged when ``--json`` is omitted.
 
 .. versionadded:: 0.4.0
 """
@@ -42,6 +50,7 @@ from agent_memory_contracts import bundle_fingerprint
 from agent_memory_contracts.bundle_diff import BundleDiff, bundle_diff
 from agent_memory_contracts.jsonschema_validator import (
     SchemaNotFoundError,
+    validate_bundle,
     validate_instance,
     validate_jsonl,
 )
@@ -147,108 +156,273 @@ def _print_errors_to_stderr(errors: list[str], prefix: str = "") -> None:
             print(msg, file=sys.stderr)
 
 
+def _emit_json(payload: Any, *, to_stderr: bool = False) -> None:
+    """Write ``payload`` as a single JSON object to stdout or stderr.
+
+    Used by the ``--json`` mode of each subcommand. On success the
+    payload goes to stdout so callers can pipe it into ``json.loads``
+    regardless of whether the human-readable text is silenced. On
+    failure the payload is emitted to stderr so exit-code 1 callers
+    can still parse the error.
+
+    The output is terminated with a single newline to match the
+    convention used by the human-readable path.
+    """
+    stream = sys.stderr if to_stderr else sys.stdout
+    json.dump(payload, stream, sort_keys=True, ensure_ascii=False)
+    stream.write("\n")
+
+
 def cmd_validate(args: argparse.Namespace) -> int:
     path = Path(args.path)
     if not path.exists():
-        print(f"validate: file not found: {path}", file=sys.stderr)
+        if args.json:
+            _emit_json(
+                {"ok": False, "schema": args.schema, "path": str(path),
+                 "mode": "json", "errors": [f"file not found: {path}"]},
+                to_stderr=True,
+            )
+        else:
+            print(f"validate: file not found: {path}", file=sys.stderr)
         return 1
 
     if args.jsonl:
         # JSONL mode: stream through validate_jsonl.
         try:
             errors = validate_jsonl(path, args.schema, raise_on_error=False)
-        except jsonschema_validator.SchemaNotFoundError as exc:
-            print(f"validate: {exc}", file=sys.stderr)
+        except SchemaNotFoundError as exc:
+            if args.json:
+                _emit_json(
+                    {"ok": False, "schema": args.schema, "path": str(path),
+                     "mode": "jsonl", "errors": [str(exc)]},
+                    to_stderr=True,
+                )
+            else:
+                print(f"validate: {exc}", file=sys.stderr)
             return 1
         except ImportError as exc:
-            print(f"validate: {exc}", file=sys.stderr)
+            if args.json:
+                _emit_json(
+                    {"ok": False, "schema": args.schema, "path": str(path),
+                     "mode": "jsonl", "errors": [str(exc)]},
+                    to_stderr=True,
+                )
+            else:
+                print(f"validate: {exc}", file=sys.stderr)
             return 1
         if errors:
+            # Flatten per-line errors into a single list of strings.
+            flat: list[str] = []
             for _ln, msgs in errors:
-                _print_errors_to_stderr(msgs)
+                flat.extend(msgs)
+            if args.json:
+                _emit_json(
+                    {"ok": False, "schema": args.schema, "path": str(path),
+                     "mode": "jsonl", "errors": flat},
+                    to_stderr=True,
+                )
+            else:
+                for _ln, msgs in errors:
+                    _print_errors_to_stderr(msgs)
             return 1
+        if args.json:
+            _emit_json(
+                {"ok": True, "schema": args.schema, "path": str(path),
+                 "mode": "jsonl", "errors": []}
+            )
         return 0
 
     # Single JSON object or array of records.
     try:
         payload = load_single_json(path)
     except FileNotFoundError:
-        print(f"validate: file not found: {path}", file=sys.stderr)
+        if args.json:
+            _emit_json(
+                {"ok": False, "schema": args.schema, "path": str(path),
+                 "mode": "json", "errors": [f"file not found: {path}"]},
+                to_stderr=True,
+            )
+        else:
+            print(f"validate: file not found: {path}", file=sys.stderr)
         return 1
     except json.JSONDecodeError as exc:
-        print(
-            f"validate: invalid JSON in {path}: {exc.msg} "
-            f"(line {exc.lineno}, col {exc.colno})",
-            file=sys.stderr,
+        msg = (
+            f"invalid JSON: {exc.msg} (line {exc.lineno}, col {exc.colno})"
         )
+        if args.json:
+            _emit_json(
+                {"ok": False, "schema": args.schema, "path": str(path),
+                 "mode": "json", "errors": [msg]},
+                to_stderr=True,
+            )
+        else:
+            print(f"validate: {msg} in {path}", file=sys.stderr)
         return 1
 
     if args.bundle:
         if not isinstance(payload, list):
-            print(
-                f"validate: --bundle requires a JSON array at the top "
-                f"level, got {type(payload).__name__}",
-                file=sys.stderr,
+            msg = (
+                f"--bundle requires a JSON array at the top level, "
+                f"got {type(payload).__name__}"
             )
+            if args.json:
+                _emit_json(
+                    {"ok": False, "schema": args.schema, "path": str(path),
+                     "mode": "bundle", "errors": [msg]},
+                    to_stderr=True,
+                )
+            else:
+                print(f"validate: {msg}", file=sys.stderr)
             return 1
         try:
-            all_errors = jsonschema_validator.validate_bundle(
+            all_errors = validate_bundle(
                 ((args.schema, r) for r in payload),
                 raise_on_error=False,
             )
-        except jsonschema_validator.SchemaNotFoundError as exc:
-            print(f"validate: {exc}", file=sys.stderr)
+        except SchemaNotFoundError as exc:
+            if args.json:
+                _emit_json(
+                    {"ok": False, "schema": args.schema, "path": str(path),
+                     "mode": "bundle", "errors": [str(exc)]},
+                    to_stderr=True,
+                )
+            else:
+                print(f"validate: {exc}", file=sys.stderr)
             return 1
         except ImportError as exc:
-            print(f"validate: {exc}", file=sys.stderr)
+            if args.json:
+                _emit_json(
+                    {"ok": False, "schema": args.schema, "path": str(path),
+                     "mode": "bundle", "errors": [str(exc)]},
+                    to_stderr=True,
+                )
+            else:
+                print(f"validate: {exc}", file=sys.stderr)
             return 1
         if all_errors:
+            flat_bundle: list[str] = []
             for schema_name, msgs in all_errors.items():
-                _print_errors_to_stderr(msgs, prefix=f"{schema_name}: ")
+                for m in msgs:
+                    flat_bundle.append(f"{schema_name}: {m}")
+            if args.json:
+                _emit_json(
+                    {"ok": False, "schema": args.schema, "path": str(path),
+                     "mode": "bundle", "errors": flat_bundle},
+                    to_stderr=True,
+                )
+            else:
+                for schema_name, msgs in all_errors.items():
+                    _print_errors_to_stderr(msgs, prefix=f"{schema_name}: ")
             return 1
+        if args.json:
+            _emit_json(
+                {"ok": True, "schema": args.schema, "path": str(path),
+                 "mode": "bundle", "errors": []}
+            )
         return 0
 
     # Default: single JSON object, validate against args.schema.
     if not isinstance(payload, dict):
-        print(
-            f"validate: expected a JSON object at the top level "
+        msg = (
+            f"expected a JSON object at the top level "
             f"(use --bundle for arrays or --jsonl for JSONL files), "
-            f"got {type(payload).__name__}",
-            file=sys.stderr,
+            f"got {type(payload).__name__}"
         )
+        if args.json:
+            _emit_json(
+                {"ok": False, "schema": args.schema, "path": str(path),
+                 "mode": "json", "errors": [msg]},
+                to_stderr=True,
+            )
+        else:
+            print(f"validate: {msg}", file=sys.stderr)
         return 1
 
     try:
         errors = validate_instance(
             payload, args.schema, raise_on_error=False
         )
-    except jsonschema_validator.SchemaNotFoundError as exc:
-        print(f"validate: {exc}", file=sys.stderr)
+    except SchemaNotFoundError as exc:
+        if args.json:
+            _emit_json(
+                {"ok": False, "schema": args.schema, "path": str(path),
+                 "mode": "json", "errors": [str(exc)]},
+                to_stderr=True,
+            )
+        else:
+            print(f"validate: {exc}", file=sys.stderr)
         return 1
     except ImportError as exc:
-        print(f"validate: {exc}", file=sys.stderr)
+        if args.json:
+            _emit_json(
+                {"ok": False, "schema": args.schema, "path": str(path),
+                 "mode": "json", "errors": [str(exc)]},
+                to_stderr=True,
+            )
+        else:
+            print(f"validate: {exc}", file=sys.stderr)
         return 1
     if errors:
-        _print_errors_to_stderr(errors)
+        if args.json:
+            _emit_json(
+                {"ok": False, "schema": args.schema, "path": str(path),
+                 "mode": "json", "errors": errors},
+                to_stderr=True,
+            )
+        else:
+            _print_errors_to_stderr(errors)
         return 1
+    if args.json:
+        _emit_json(
+            {"ok": True, "schema": args.schema, "path": str(path),
+             "mode": "json", "errors": []}
+        )
     return 0
 
 
 def cmd_fingerprint(args: argparse.Namespace) -> int:
     path = Path(args.path)
     if not path.exists():
-        print(f"fingerprint: file not found: {path}", file=sys.stderr)
+        if args.json:
+            _emit_json(
+                {"ok": False, "path": str(path),
+                 "error": f"file not found: {path}"},
+                to_stderr=True,
+            )
+        else:
+            print(f"fingerprint: file not found: {path}", file=sys.stderr)
         return 1
     try:
         records = read_bundle(path)
     except FileNotFoundError:
-        print(f"fingerprint: file not found: {path}", file=sys.stderr)
+        if args.json:
+            _emit_json(
+                {"ok": False, "path": str(path),
+                 "error": f"file not found: {path}"},
+                to_stderr=True,
+            )
+        else:
+            print(f"fingerprint: file not found: {path}", file=sys.stderr)
         return 1
     except (json.JSONDecodeError, ValueError) as exc:
-        print(f"fingerprint: failed to parse {path}: {exc}", file=sys.stderr)
+        if args.json:
+            _emit_json(
+                {"ok": False, "path": str(path),
+                 "error": f"failed to parse {path}: {exc}"},
+                to_stderr=True,
+            )
+        else:
+            print(f"fingerprint: failed to parse {path}: {exc}",
+                  file=sys.stderr)
         return 1
     digest = bundle_fingerprint(records)
-    print(digest)
+    if args.json:
+        _emit_json(
+            {"ok": True, "path": str(path), "fingerprint": digest,
+             "record_count": len(records)}
+        )
+    else:
+        print(digest)
     return 0
 
 
@@ -256,32 +430,70 @@ def cmd_diff(args: argparse.Namespace) -> int:
     a_path = Path(args.path_a)
     b_path = Path(args.path_b)
     if not a_path.exists():
-        print(f"diff: file not found: {a_path}", file=sys.stderr)
+        if args.json:
+            _emit_json(
+                {"ok": False, "path_a": str(a_path), "path_b": str(b_path),
+                 "error": f"file not found: {a_path}"},
+                to_stderr=True,
+            )
+        else:
+            print(f"diff: file not found: {a_path}", file=sys.stderr)
         return 1
     if not b_path.exists():
-        print(f"diff: file not found: {b_path}", file=sys.stderr)
+        if args.json:
+            _emit_json(
+                {"ok": False, "path_a": str(a_path), "path_b": str(b_path),
+                 "error": f"file not found: {b_path}"},
+                to_stderr=True,
+            )
+        else:
+            print(f"diff: file not found: {b_path}", file=sys.stderr)
         return 1
     try:
         a = read_bundle(a_path)
         b = read_bundle(b_path)
     except FileNotFoundError as exc:
-        print(f"diff: file not found: {exc.filename or exc}", file=sys.stderr)
+        if args.json:
+            _emit_json(
+                {"ok": False, "path_a": str(a_path), "path_b": str(b_path),
+                 "error": f"file not found: {exc.filename or exc}"},
+                to_stderr=True,
+            )
+        else:
+            print(f"diff: file not found: {exc.filename or exc}",
+                  file=sys.stderr)
         return 1
     except (json.JSONDecodeError, ValueError) as exc:
-        print(f"diff: failed to parse input: {exc}", file=sys.stderr)
+        if args.json:
+            _emit_json(
+                {"ok": False, "path_a": str(a_path), "path_b": str(b_path),
+                 "error": f"failed to parse input: {exc}"},
+                to_stderr=True,
+            )
+        else:
+            print(f"diff: failed to parse input: {exc}", file=sys.stderr)
         return 1
     result = bundle_diff(a, b)
-    print(
-        f"{len(result.added)} added, {len(result.removed)} removed, "
-        f"{len(result.changed)} changed, {result.unchanged_count} unchanged"
-    )
-    for r in result.added:
-        print(f"+ {r.get('id', '<no-id>')}")
-    for r in result.removed:
-        print(f"- {r.get('id', '<no-id>')}")
-    for old, new in result.changed:
-        rid = new.get("id") or old.get("id", "<no-id>")
-        print(f"~ {rid}")
+    if args.json:
+        _emit_json(
+            {"ok": True,
+             "added": result.added,
+             "removed": result.removed,
+             "changed": [list(pair) for pair in result.changed],
+             "unchanged_count": result.unchanged_count}
+        )
+    else:
+        print(
+            f"{len(result.added)} added, {len(result.removed)} removed, "
+            f"{len(result.changed)} changed, {result.unchanged_count} unchanged"
+        )
+        for r in result.added:
+            print(f"+ {r.get('id', '<no-id>')}")
+        for r in result.removed:
+            print(f"- {r.get('id', '<no-id>')}")
+        for old, new in result.changed:
+            rid = new.get("id") or old.get("id", "<no-id>")
+            print(f"~ {rid}")
     return 0
 
 
@@ -327,6 +539,15 @@ def _build_parser() -> argparse.ArgumentParser:
         "--version",
         action="version",
         version=f"{PACKAGE_NAME} {_get_version()}",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help=(
+            "Emit a single JSON object to stdout (and a separate JSON "
+            "object to stderr on failure) instead of the human-readable "
+            "text output. Applies to every subcommand."
+        ),
     )
     sub = parser.add_subparsers(dest="subcommand", metavar="<subcommand>")
 
