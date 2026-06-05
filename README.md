@@ -7,7 +7,7 @@
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](https://www.python.org/downloads/)
 [![Standard library only](https://img.shields.io/badge/dependencies-none-success)](https://github.com/eoniclife/agent-memory-contracts)
 [![Schemas](https://img.shields.io/badge/JSON_Schemas-23-blue)](https://github.com/eoniclife/agent-memory-contracts/tree/main/src/agent_memory_contracts/schemas)
-[![Tests](https://img.shields.io/badge/tests-49_passing-brightgreen)](https://github.com/eoniclife/agent-memory-contracts/tree/main/tests)
+[![Tests](https://img.shields.io/badge/tests-228_passing-brightgreen)](https://github.com/eoniclife/agent-memory-contracts/tree/main/tests)
 
 > The core design question this library answers: *if an LLM extracts
 > something from raw sources, how do you keep that extraction from
@@ -101,6 +101,12 @@ Two runnable end-to-end examples:
   with full pre/post records for the changed entries. Short-circuits
   via `bundle_fingerprint` when both bundles hash equal, so the
   "no changes" case is one hash comparison.
+- **`merge_bundles(*bundles, ..., prefer=...)`** for many-to-one
+  bundle union. Returns a `BundleMerge(records, conflicts,
+  duplicate_ids)`. Records are deduplicated by `id_field`; conflicts
+  are surfaced for the reducer to triage. `prefer='last'` (default)
+  / `'first'` resolve silently, `prefer='raise'` fails loudly. Useful
+  for multi-source ingest, bidirectional sync, and backfill.
 - **Opt-in `jsonschema` validator** (`pip install agent-memory-contracts[jsonschema]`)
   for polyglot producers that want to validate Python dataclasses
   against the bundled JSON Schemas before the record leaves the
@@ -108,11 +114,15 @@ Two runnable end-to-end examples:
   `iter_validated_jsonl` for streaming.
 - **CLI** (`python -m agent_memory_contracts`) for the non-Python
   use case: validate a JSON or JSONL file against a schema, compute
-  a bundle fingerprint, diff two bundles. Stdlib `argparse`.
+  a bundle fingerprint, diff two bundles, or merge N bundles into one.
+  Stdlib `argparse`. Optional `--json` flag on every subcommand for
+  programmatic consumption.
 - **Zero runtime dependencies** (stdlib only)
 - **~3,400 lines of Python**, ~600 lines of JSON Schema
-- **139 tests** covering id derivation, contract validation, bundle
-  integrity, temporal queries, and the bundle fingerprint primitive
+- **228 tests** covering id derivation, contract validation, bundle
+  integrity, temporal queries, the bundle fingerprint, diff, and
+  merge primitives, the optional JSON Schema validator, and the
+  CLI (including `--json` mode)
 
 ## Design principles
 
@@ -255,7 +265,7 @@ Requires Python 3.10+. No runtime dependencies.
 
 ```bash
 pip install -e ".[dev]"
-pytest -q                            # 139 tests
+pytest -q                            # 228 tests
 PYTHONPATH=src python examples/quickstart.py
 PYTHONPATH=src python examples/extract_taste_cards.py
 ```

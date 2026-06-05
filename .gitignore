@@ -47,3 +47,15 @@ ENV/
 *.swo
 *~
 Thumbs.db
+
+# Mavis / mavis-team plans (local-only orchestration state)
+.mavis/
+
+# Python packaging tool lockfiles (the project uses setuptools, not uv)
+uv.lock
+poetry.lock
+Pipfile.lock
+
+# Local analysis / planning scratchpads (not part of the public repo)
+COMPETITIVE_ANALYSIS.md
+YC_APPLICATION_DRAFT.md

@@ -5,6 +5,61 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-06-06
+
+### Added
+
+- New module `agent_memory_contracts.merge` with one public function
+  `merge_bundles(*bundles, *, id_field="id", prefer="last")` and a
+  frozen `BundleMerge` dataclass result. The merge is many-to-one
+  and set-semantic:
+  - Records are deduplicated by `id_field`; intra-bundle duplicates
+    are resolved by last-write-wins and reported in
+    `BundleMerge.duplicate_ids`.
+  - Inter-bundle content conflicts (same id, different content)
+    are reported in `BundleMerge.conflicts` regardless of
+    `prefer` policy.
+  - `prefer="last"` (default) and `prefer="first"` resolve the
+    conflict silently; `prefer="raise"` raises `ValueError`.
+  - Use cases: multi-source ingest (pulling records from N
+    upstream systems into one bundle), bidirectional sync
+    (combining local and remote views), and backfill (stitching
+    historical re-extractions into an existing bundle).
+  - Like the other bundle primitives: stdlib only, dicts /
+    Mappings / dataclasses accepted, content-derived canonical
+    JSON comparison, deterministic output.
+- New subcommand `python -m agent_memory_contracts merge <paths...>`
+  with `--prefer {last,first,raise}` and `--id-field` options.
+  Supports the same `--json` envelope as the other subcommands.
+- New `py.typed` marker at `src/agent_memory_contracts/py.typed`,
+  enabling PEP 561 typed-package support. Downstream `mypy` /
+  `pyright` will pick up the library's `from __future__ import
+  annotations` and per-module type hints.
+- `gitignore` updates: `.mavis/` (Mavis plan state), `uv.lock` /
+  `poetry.lock` / `Pipfile.lock` (the project uses setuptools), and
+  local analysis scratchpads (`COMPETITIVE_ANALYSIS.md`,
+  `YC_APPLICATION_DRAFT.md`) are now ignored.
+
+### Changed
+
+- `python -m agent_memory_contracts` CLI now supports a global
+  `--json` flag that flips every subcommand (`validate`,
+  `fingerprint`, `diff`, `merge`) from human-readable text output
+  to a single, machine-parseable JSON object. Exit codes are
+  preserved (0 success, 1 failure, 2 usage error). The
+  `validate --bundle` path also got a pre-existing `NameError` fix
+  (the submodule was not bound locally; the import list now
+  includes `validate_bundle`).
+- `argparse` parser uses `parents=[json_parent]` so `--json` is
+  visible in every subcommand's `--help` and works both before and
+  after the subcommand name. `allow_abbrev=False` is set on the
+  top-level parser to prevent `--json` from being silently
+  reinterpreted as the existing `--jsonl` flag.
+- 89 new tests across three new test files (`test_merge.py`,
+  `test_cli_json.py`, `test_cli_merge.py`) plus the expanded
+  `test_cli.py` baseline. The full suite is 228 passed + 1
+  expected skip on Python 3.10/3.11/3.12.
+
 ## [0.4.0] - 2026-06-05
 
 ### Added
