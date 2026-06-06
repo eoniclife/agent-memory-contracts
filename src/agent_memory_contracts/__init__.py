@@ -115,8 +115,20 @@ from .hygiene import (
     compute_hygiene_report,
     hygiene_report_to_markdown,
 )
+from .citations import (
+    CitationEdge,
+    CitationGraph,
+    CitationNode,
+    CitationPath,
+    DanglingRef,
+    default_claim_predicate,
+    default_source_predicate,
+    find_dangling_refs,
+    find_unused_sources,
+    find_unsupported_claims,
+)
 
-__version__ = "0.7.0"
+__version__ = "0.8.0"
 
 __all__ = [
     # Evidence plane
@@ -202,4 +214,15 @@ __all__ = [
     "MemoryHygieneReport",
     "compute_hygiene_report",
     "hygiene_report_to_markdown",
+    # Citation graph (added in 0.8.0)
+    "CitationNode",
+    "CitationEdge",
+    "CitationPath",
+    "DanglingRef",
+    "CitationGraph",
+    "find_unsupported_claims",
+    "find_unused_sources",
+    "find_dangling_refs",
+    "default_claim_predicate",
+    "default_source_predicate",
 ]

@@ -38,6 +38,92 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - No library-code or schema changes. All 325 existing tests still
   pass; the build artifact is a 105 KB wheel + 127 KB sdist.
 
+## [0.8.0] - 2026-06-06
+
+### Added
+
+- New module `agent_memory_contracts.citations` with the
+  citation graph + provenance traversal primitives:
+  - `CitationNode` (frozen dataclass) — a typed wrapper
+    around a record in the graph. Three node kinds:
+    `source` (SourceRecord, EpisodeRecord), `evidence`
+    (EvidenceSpanRecord), `claim` (candidates, ledger
+    entries, taste cards, context packs).
+  - `CitationEdge` (frozen dataclass) — a directed edge
+    with one of two relations: `cites` (claim -> evidence)
+    or `derives_from` (evidence -> source).
+  - `CitationPath` (frozen dataclass) — a single walk
+    through the graph, with `length` and `is_supported()`
+    helpers.
+  - `DanglingRef` (frozen dataclass) — a citation from
+    one record to another that is not present in the
+    bundle. Transient analysis artifact, no id.
+  - `CitationGraph` (frozen dataclass) — the graph itself,
+    built from a bundle via `CitationGraph.from_bundle(bundle)`.
+    Exposes `traverse` (BFS, forward/backward/both,
+    bounded by `max_depth`), `descendants`, `predecessors`,
+    `shortest_path`, `size`, `node_count_by_kind`,
+    `has_node`, `get_node`, `dangling_refs`.
+  - `find_unsupported_claims(bundle, *, claim_predicate=...)`
+    — returns every claim in the bundle with no path to a
+    source. Sorted by id.
+  - `find_unused_sources(bundle, *, source_predicate=...)`
+    — returns every source in the bundle with no path
+    from a claim. Sorted by id.
+  - `find_dangling_refs(bundle)` — returns every dangling
+    reference. Sorted by (from_id, missing_id, relation).
+  - `default_claim_predicate(record)` — any record with
+    `evidence_span_ids` or `evidence_id` is a claim.
+  - `default_source_predicate(record)` — SourceRecord or
+    EpisodeRecord is a source.
+- New `examples/citations.py` — worked example covering
+  linear chain, diamond, disconnected (with dangling ref),
+  and dict-form records.
+
+### Behavioral notes
+
+- The graph is **derived**, not stored. Build it on demand
+  from a bundle; do not persist it. Frozen dataclass
+  convention applies: no `add_node` / `remove_edge`.
+- The graph is structurally a **DAG** (sources point to
+  nothing, evidence points only to sources, claims point
+  only to evidence). Cycles are not structurally possible.
+  A cycle in the input raises `ValueError` from
+  `from_bundle` (defensive check).
+- `MemoryReducerDecision` is an audit record, not a claim.
+  It carries `evidence_span_ids` for traceability but is
+  excluded from the citation graph (the decision itself
+  is not a claim).
+- Both dataclass records and dict/Mapping records are
+  accepted by `from_bundle`; classification is
+  shape-based (`source_type`, `episode_type`,
+  `span_hash_sha256`, `evidence_span_ids` / `evidence_id`).
+
+### Test discipline
+
+- 43 new tests in `tests/test_citations.py` covering:
+  frozen-dataclass surface, build from empty/linear/
+  diamond/disconnected/mixed-plane fixtures, dict-form
+  classification, BFS traversal in all directions,
+  `max_depth` semantics, `shortest_path`, the two audit
+  queries, the dangling-refs function, default
+  predicates, and public API exports.
+- Total: 368 tests passing (was 325 in v0.7.0), 1
+  expected skip. `mypy --strict` clean on all 23
+  source files. The build artifact (when v0.8.0 is
+  published) will be a ~110 KB wheel + ~130 KB sdist.
+
+### Out of scope for v0.8.0
+
+- No `citations` CLI subcommand. Primitives are library-
+  only; one line of glue if a UX needs it.
+- No graph serialization format. Persist a bundle; build
+  the graph on demand.
+- No trust scoring or confidence propagation. The graph
+  is structural.
+- No graph analytics (PageRank, centrality, clustering).
+- No cycle handling. DAG is structural; cycles raise.
+
 ## [0.7.0] - 2026-06-06
 
 ### Added
