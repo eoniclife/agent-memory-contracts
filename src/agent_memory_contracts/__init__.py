@@ -105,7 +105,7 @@ from .contextpack_validation import validate_contextpack_bundle
 from .bundles import bundle_fingerprint
 from .merge import BundleMerge, merge_bundles
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 __all__ = [
     # Evidence plane

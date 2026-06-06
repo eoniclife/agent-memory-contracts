@@ -8,7 +8,7 @@
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](https://www.python.org/downloads/)
 [![Standard library only](https://img.shields.io/badge/dependencies-none-success)](https://github.com/eoniclife/agent-memory-contracts)
 [![Schemas](https://img.shields.io/badge/JSON_Schemas-23-blue)](https://github.com/eoniclife/agent-memory-contracts/tree/main/src/agent_memory_contracts/schemas)
-[![Tests](https://img.shields.io/badge/tests-228_passing-brightgreen)](https://github.com/eoniclife/agent-memory-contracts/tree/main/tests)
+[![Tests](https://img.shields.io/badge/tests-239_passing-brightgreen)](https://github.com/eoniclife/agent-memory-contracts/tree/main/tests)
 
 > The core design question this library answers: *if an LLM extracts
 > something from raw sources, how do you keep that extraction from
@@ -77,10 +77,11 @@ validate_ledger_bundle(
 )
 ```
 
-Two runnable end-to-end examples:
+Three runnable end-to-end examples:
 
 - [`examples/quickstart.py`](examples/quickstart.py) -- minimal source -> span -> candidate -> ledger
 - [`examples/extract_taste_cards.py`](examples/extract_taste_cards.py) -- full transcript -> multiple taste cards, with contrast pairs
+- [`examples/reference_reducer.py`](examples/reference_reducer.py) -- complete reference reducer (~1000 lines) with three worked scenarios: happy path, rejection of low-confidence / no-evidence / stale candidates, and a deliberate validator-enforcement case. This is the canonical answer to "what does a contracts-library reducer look like in production?"
 
 ## What's in the box
 
@@ -119,11 +120,19 @@ Two runnable end-to-end examples:
   Stdlib `argparse`. Optional `--json` flag on every subcommand for
   programmatic consumption.
 - **Zero runtime dependencies** (stdlib only)
-- **~3,400 lines of Python**, ~600 lines of JSON Schema
-- **228 tests** covering id derivation, contract validation, bundle
+- **~4,500 lines of Python**, ~600 lines of JSON Schema
+- **239 tests** covering id derivation, contract validation, bundle
   integrity, temporal queries, the bundle fingerprint, diff, and
-  merge primitives, the optional JSON Schema validator, and the
-  CLI (including `--json` mode)
+  merge primitives, the optional JSON Schema validator, the
+  CLI (including `--json` mode), the reference reducer, and the
+  SQLite-to-contracts migration example
+- **`mypy --strict` clean** on the library code (CI gate)
+- **Stdlib-only benchmark suite** at `benchmarks/` for the three
+  bundle primitives (100/1k/10k/50k records, ~135ms for 50k
+  fingerprints)
+- **Migration guide** at `docs/migration.md` for adopting the
+  library from a SQLite-style memory store, with a worked
+  end-to-end example (`docs/migration_example.py`)
 
 ## Design principles
 
@@ -266,13 +275,19 @@ Requires Python 3.10+. No runtime dependencies.
 
 ```bash
 pip install -e ".[dev]"
-pytest -q                            # 228 tests
+pytest -q                            # 239 tests
 PYTHONPATH=src python examples/quickstart.py
 PYTHONPATH=src python examples/extract_taste_cards.py
+PYTHONPATH=src python examples/reference_reducer.py
+PYTHONPATH=src python docs/migration_example.py
+python -m mypy src/agent_memory_contracts        # strict-clean
+PYTHONPATH=src python benchmarks/run_all.py      # ~3.8s
 ```
 
 Tests are stdlib `unittest` (no test framework dependency at runtime).
-CI runs on Python 3.10, 3.11, 3.12 via GitHub Actions.
+CI runs on Python 3.10, 3.11, 3.12 via GitHub Actions. The CI workflow
+includes a `mypy` job (strict) and a smoke-test step that iterates
+`for f in examples/*.py` so any new example is auto-checked.
 
 ## License
 

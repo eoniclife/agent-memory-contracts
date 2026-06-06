@@ -1,6 +1,6 @@
 # benchmark suite: bundle primitives
 machine: Python 3.14.4 on Darwin arm64 (arm)
-total_runtime_seconds: 3.629
+total_runtime_seconds: 3.653
 
 Three primitives are measured: `bundle_fingerprint`,
 `bundle_diff`, and `merge_bundles`. Per-script reports
@@ -15,10 +15,10 @@ machine: Python 3.14.4 on Darwin arm64 (arm)
 
 | n_records | bundles | seconds | per_record_us |
 | ---: | ---: | ---: | ---: |
-| 100 | 1 | 0.000248 | 2.48 |
-| 1000 | 1 | 0.002459 | 2.46 |
-| 10000 | 1 | 0.024911 | 2.49 |
-| 50000 | 1 | 0.129674 | 2.59 |
+| 100 | 1 | 0.000254 | 2.54 |
+| 1000 | 1 | 0.002572 | 2.57 |
+| 10000 | 1 | 0.025800 | 2.58 |
+| 50000 | 1 | 0.134591 | 2.69 |
 
 ---
 
@@ -31,10 +31,10 @@ fingerprint short-circuit does not fire).
 
 | n_records | bundles | seconds | per_record_us |
 | ---: | ---: | ---: | ---: |
-| 100 | 2 | 0.001003 | 10.03 |
-| 1000 | 2 | 0.010451 | 10.45 |
-| 10000 | 2 | 0.108533 | 10.85 |
-| 50000 | 2 | 0.546178 | 10.92 |
+| 100 | 2 | 0.001037 | 10.37 |
+| 1000 | 2 | 0.010309 | 10.31 |
+| 10000 | 2 | 0.106563 | 10.66 |
+| 50000 | 2 | 0.549401 | 10.99 |
 
 ---
 
@@ -48,9 +48,9 @@ path; identical records do not generate a conflict.
 
 | n_records | bundles | seconds | per_record_us |
 | ---: | ---: | ---: | ---: |
-| 100 | 2 | 0.000771 | 7.71 |
-| 1000 | 2 | 0.007845 | 7.84 |
-| 10000 | 2 | 0.085473 | 8.55 |
-| 100 | 3 | 0.001210 | 12.10 |
-| 1000 | 3 | 0.012054 | 12.05 |
-| 10000 | 3 | 0.124978 | 12.50 |
+| 100 | 2 | 0.000799 | 7.99 |
+| 1000 | 2 | 0.008053 | 8.05 |
+| 10000 | 2 | 0.084535 | 8.45 |
+| 100 | 3 | 0.001187 | 11.87 |
+| 1000 | 3 | 0.011899 | 11.90 |
+| 10000 | 3 | 0.127912 | 12.79 |

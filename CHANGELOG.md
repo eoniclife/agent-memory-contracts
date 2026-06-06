@@ -5,6 +5,75 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-06-06
+
+### Added
+
+- New example `examples/reference_reducer.py` (~1010 lines), a
+  complete reference reducer with three worked scenarios:
+  happy-path promotion, rejection of low-confidence / no-evidence
+  / stale candidates, and a deliberate validator-enforcement
+  case (a `MemoryReducerDecision` that doesn't authorize its
+  claimed ledger entry is caught by `validate_ledger_bundle`).
+  The reducer is reusable as a function:
+  `reduce_candidates_to_trusted_memory(...)`. This is the
+  canonical answer to "what does a contracts-library reducer
+  look like in production?"
+- New tests `tests/test_reference_reducer.py` (6 tests) covering
+  the happy path, the three rejection cases, the partial
+  promotion, the validator enforcement, and the script-running
+  smoke test.
+- New example `docs/migration_example.py` (~477 lines), a worked
+  end-to-end migration from a synthetic 3-row SQLite store to a
+  validated contracts JSONL fileset. Demonstrates content-derived
+  deduplication (3 rows → 2 distinct ledger ids), synthetic
+  reducer fabrication, pre-validation dedup, JSONL fileset
+  output, and a stable bundle fingerprint.
+- New doc `docs/migration.md` (~580 lines), the migration guide
+  that walks a reader from SQLite-style memory to contracts-
+  shaped records. Includes: who-this-is-for, a synthetic
+  "before" stack with five failure modes, the "after" stack
+  using the library, a side-by-side comparison of five common
+  operations, three incremental adoption patterns (library
+  alongside / library as the schema / library as the truth),
+  what you give up, what you gain, and a reference to the
+  worked example.
+- New tests `tests/test_migration_example.py` (5 tests) that
+  smoke-test the migration example: it runs end-to-end,
+  collapses the duplicate preferences, writes the expected
+  JSONL fileset, the ledger validates against the library's
+  expected shape, and the fingerprint is stable across runs.
+- New `benchmarks/` directory with a stdlib-only benchmark
+  suite for `bundle_fingerprint`, `bundle_diff`, and
+  `merge_bundles` at 100/1k/10k/50k records. Numbers confirm
+  O(n) scaling (flat `per_record_us`):
+  - fingerprint: 2.5us/record, 50k records in ~135ms
+  - diff: ~10us/record, 50k records in ~550ms
+  - merge: 8-16us/record, 10k records in ~85ms
+  Includes a `run_all.py` driver and committed `RESULTS.md` for
+  a baseline. No new dependencies.
+
+### Changed
+
+- **CI now runs `mypy --strict` on `src/agent_memory_contracts`.**
+  The mypy job runs on the 3.10/3.11/3.12 matrix. 116 mypy errors
+  were found and fixed in this release (no public-API change):
+  `Protocol` for class-lookup tables, `TypeVar` on `_build_record`,
+  `cast()` at post-narrow sites, explicit `dict[str, Any]`
+  generics, and a real bug catch in `__main__.py` (the `errors`
+  var was reassigned between `list[tuple]` and `list[str]` in
+  the same scope — renamed to `instance_errors`).
+- The existing `test` job now iterates `for f in examples/*.py`
+  as a smoke test, so any new example added to the repo is
+  automatically CI-checked.
+- `pyproject.toml` now has a `[tool.mypy]` section pinning the
+  configuration (`python_version = "3.10"`, `strict = true`,
+  `files = ["src/agent_memory_contracts"]`).
+- `mypy>=1.10` is in the `dev` optional-dependency (not runtime).
+- 16 new tests (6 reference-reducer + 5 migration example + 5
+  mypy-related harness). The full suite is 239 passed + 1
+  expected skip on Python 3.10/3.11/3.12.
+
 ## [0.5.0] - 2026-06-06
 
 ### Added
