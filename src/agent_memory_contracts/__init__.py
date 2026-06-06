@@ -104,8 +104,19 @@ from .contextpack_ids import (
 from .contextpack_validation import validate_contextpack_bundle
 from .bundles import bundle_fingerprint
 from .merge import BundleMerge, merge_bundles
+from .conflict import (
+    ConflictResolution,
+    apply_resolutions,
+    resolve_conflict,
+    validate_resolutions,
+)
+from .hygiene import (
+    MemoryHygieneReport,
+    compute_hygiene_report,
+    hygiene_report_to_markdown,
+)
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 
 __all__ = [
     # Evidence plane
@@ -182,4 +193,13 @@ __all__ = [
     "bundle_fingerprint",
     "BundleMerge",
     "merge_bundles",
+    # Conflict resolution (added in 0.7.0)
+    "ConflictResolution",
+    "resolve_conflict",
+    "apply_resolutions",
+    "validate_resolutions",
+    # Memory hygiene (added in 0.7.0)
+    "MemoryHygieneReport",
+    "compute_hygiene_report",
+    "hygiene_report_to_markdown",
 ]

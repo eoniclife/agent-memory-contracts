@@ -10,6 +10,10 @@ operational primitives of the library:
 - ``merge``      Merge two or more bundles into one (set-semantic,
                  last-write-wins on duplicate ids; ``--prefer`` selects
                  the conflict-resolution policy).
+- ``hygiene``    Compute a memory hygiene report for a bundle
+                 (counts by plane / type / privacy, temporal state,
+                 evidence integrity). Markdown by default, JSON with
+                 ``--json``.
 
 The CLI is intentionally thin: it parses a file, calls into the
 public Python API, and shapes the output. All real work stays in the
@@ -66,6 +70,17 @@ from agent_memory_contracts.jsonschema_validator import (
     validate_jsonl,
 )
 from agent_memory_contracts.merge import BundleMerge, merge_bundles
+from agent_memory_contracts.conflict import (
+    ConflictResolution,
+    apply_resolutions,
+    resolve_conflict,
+    validate_resolutions,
+)
+from agent_memory_contracts.hygiene import (
+    MemoryHygieneReport,
+    compute_hygiene_report,
+    hygiene_report_to_markdown,
+)
 
 
 PACKAGE_NAME = "agent-memory-contracts"
@@ -610,6 +625,72 @@ def cmd_merge(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_hygiene(args: argparse.Namespace) -> int:
+    """Compute a MemoryHygieneReport for a bundle. Default output
+    is a Markdown report; with ``--json``, a JSON envelope.
+    """
+    path = Path(args.path)
+    if not path.exists():
+        if args.json:
+            _emit_json(
+                {"ok": False, "path": str(path),
+                 "error": f"file not found: {path}"},
+                to_stderr=True,
+            )
+        else:
+            print(f"hygiene: file not found: {path}", file=sys.stderr)
+        return 1
+    try:
+        bundle = read_bundle(path)
+    except FileNotFoundError as exc:
+        if args.json:
+            _emit_json(
+                {"ok": False, "path": str(path),
+                 "error": f"file not found: {exc.filename or path}"},
+                to_stderr=True,
+            )
+        else:
+            print(
+                f"hygiene: file not found: {exc.filename or path}",
+                file=sys.stderr,
+            )
+        return 1
+    except (json.JSONDecodeError, ValueError) as exc:
+        if args.json:
+            _emit_json(
+                {"ok": False, "path": str(path),
+                 "error": f"failed to parse {path}: {exc}"},
+                to_stderr=True,
+            )
+        else:
+            print(
+                f"hygiene: failed to parse {path}: {exc}",
+                file=sys.stderr,
+            )
+        return 1
+    try:
+        report = compute_hygiene_report(
+            bundle,
+            window_start=args.window_start,
+            window_end=args.window_end,
+        )
+    except (ValueError, TypeError) as exc:
+        if args.json:
+            _emit_json(
+                {"ok": False, "path": str(path), "error": str(exc)},
+                to_stderr=True,
+            )
+        else:
+            print(f"hygiene: {exc}", file=sys.stderr)
+        return 1
+    if args.json:
+        _emit_json({"ok": True, **report.to_dict()})
+    else:
+        print(hygiene_report_to_markdown(report), end="")
+    return 0
+    return 0
+
+
 # ---------------------------------------------------------------------------
 # Version resolution
 # ---------------------------------------------------------------------------
@@ -681,7 +762,7 @@ def _build_parser() -> argparse.ArgumentParser:
         prog="python -m agent_memory_contracts",
         description=(
             "agent-memory-contracts CLI: validate, fingerprint, diff, "
-            "and merge agent memory bundles."
+            "merge, and hygiene for agent memory bundles."
         ),
         allow_abbrev=False,
         parents=[json_parent],
@@ -793,6 +874,41 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     p_merge.set_defaults(_func=cmd_merge)
+
+    p_hygiene = sub.add_parser(
+        "hygiene",
+        parents=[json_parent],
+        help="Compute a memory hygiene report for a bundle.",
+        description=(
+            "Compute a MemoryHygieneReport for a bundle: structural "
+            "snapshot (counts by plane / type / privacy), temporal "
+            "state (active / stale / expired / superseded), and "
+            "evidence integrity (missing / orphan). Default output "
+            "is a Markdown report; with --json, a JSON envelope."
+        ),
+    )
+    p_hygiene.add_argument(
+        "path", help="Path to the JSON or JSONL bundle.",
+    )
+    p_hygiene.add_argument(
+        "--from",
+        dest="window_start",
+        default=None,
+        help=(
+            "ISO 8601 UTC inclusive lower bound of the time window. "
+            "Defaults to the earliest timestamp in the bundle."
+        ),
+    )
+    p_hygiene.add_argument(
+        "--to",
+        dest="window_end",
+        default=None,
+        help=(
+            "ISO 8601 UTC inclusive upper bound of the time window. "
+            "Defaults to the latest timestamp in the bundle."
+        ),
+    )
+    p_hygiene.set_defaults(_func=cmd_hygiene)
 
     return parser
 
