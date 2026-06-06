@@ -47,16 +47,20 @@ jsonschema = [
     "jsonschema>=4.0",
 ]
 
+[project.scripts]
+agent-memory-contracts = "agent_memory_contracts.__main__:main"
+
 [project.urls]
 Homepage = "https://github.com/eoniclife/agent-memory-contracts"
 Issues = "https://github.com/eoniclife/agent-memory-contracts/issues"
 Source = "https://github.com/eoniclife/agent-memory-contracts"
+Changelog = "https://github.com/eoniclife/agent-memory-contracts/blob/main/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-agent_memory_contracts = ["schemas/*.json"]
+agent_memory_contracts = ["schemas/*.json", "py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

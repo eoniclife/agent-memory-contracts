@@ -4,6 +4,7 @@
 
 [![CI](https://github.com/eoniclife/agent-memory-contracts/actions/workflows/ci.yml/badge.svg)](https://github.com/eoniclife/agent-memory-contracts/actions/workflows/ci.yml)
 [![mypy](https://github.com/eoniclife/agent-memory-contracts/actions/workflows/ci.yml/badge.svg?job=mypy)](https://github.com/eoniclife/agent-memory-contracts/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/agent-memory-contracts)](https://pypi.org/project/agent-memory-contracts/)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](https://www.python.org/downloads/)
 [![Standard library only](https://img.shields.io/badge/dependencies-none-success)](https://github.com/eoniclife/agent-memory-contracts)
@@ -13,6 +14,28 @@
 > The core design question this library answers: *if an LLM extracts
 > something from raw sources, how do you keep that extraction from
 > silently becoming "memory" the agent treats as truth?*
+
+## Install
+
+```bash
+pip install agent-memory-contracts
+```
+
+The library has zero runtime dependencies (stdlib only). For
+`python -m agent_memory_contracts validate` and the optional
+JSON Schema validator, install with the `jsonschema` extra:
+
+```bash
+pip install agent-memory-contracts[jsonschema]
+```
+
+After install, the CLI is available as both a module and a console
+script:
+
+```bash
+python -m agent_memory_contracts --version
+agent-memory-contracts --version    # same, via the [project.scripts] entry point
+```
 
 This library was extracted from a 30+ sprint falsification-first build
 of a private agent memory kernel. The schemas and id formats are

@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-06-06
+
+### Added
+
+- **PyPI publish pipeline.** Library is now ready to publish to
+  PyPI via GitHub Actions using [trusted publishing (OIDC)](https://docs.pypi.org/trusted-publishers/).
+  New workflow: `.github/workflows/publish.yml`. Triggers on GitHub
+  Release (`types: [published]`) and on manual `workflow_dispatch`
+  (with a TestPyPI checkbox for dry-runs). Builds sdist + wheel,
+  verifies `py.typed` marker and 23 schemas are present, and
+  publishes via the OIDC token from the `pypi` environment — no
+  long-lived PyPI token to leak.
+- **Console script entry point.** `pip install agent-memory-contracts`
+  now installs an `agent-memory-contracts` console script in
+  addition to the existing `python -m agent_memory_contracts`
+  module form. Both work; the console script is the recommended
+  form in the README.
+- **Install instructions + PyPI badge** in `README.md`. The library
+  has zero runtime dependencies (stdlib only); the `[jsonschema]`
+  extra is documented as optional for `validate` and the
+  JSON-Schema validator.
+
+### Changed
+
+- `pyproject.toml`:
+  - Added `[project.scripts]` entry: `agent-memory-contracts`
+    → `agent_memory_contracts.__main__:main`.
+  - Added `Changelog` URL to `[project.urls]`.
+  - Added explicit `py.typed` to `[tool.setuptools.package-data]`
+    (PEP 561; some setuptools versions do not auto-include it).
+- No library-code or schema changes. All 325 existing tests still
+  pass; the build artifact is a 105 KB wheel + 127 KB sdist.
+
 ## [0.7.0] - 2026-06-06
 
 ### Added
