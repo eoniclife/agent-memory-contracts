@@ -5,6 +5,85 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-06-06
+
+### Added
+
+- New module `agent_memory_contracts.conflict` with the
+  `ConflictResolution` schema and three primitives:
+  - `resolve_conflict(conflict, chosen, *, resolved_by,
+    rationale, resolved_at=None, metadata=None)` — build a
+    `ConflictResolution` audit record for one surface-form
+    conflict. Three policies: pick-one (int variant index),
+    `"merge"` (synthetic merged record, last-write-wins per
+    field by bundle index), `"split"` (no new record; both
+    variants flagged with rationale).
+  - `apply_resolutions(bundle, resolutions, *, now=None)` —
+    apply a list of resolutions to a bundle, returning a new
+    bundle. Per the user's "keep the variants" rule, the
+    chosen record is **added** to the bundle (never in-place
+    replacement); the rejected variants stay in the bundle
+    with `superseded_by_conflict_resolution` and
+    `superseded_by` fields updated. The audit chain is
+    visible in the bundle itself.
+  - `validate_resolutions(bundle, resolutions)` —
+    non-raising validation, returns a list of error messages.
+    Designed for product UIs that show validation issues inline.
+  - Content-derived id: `confres_<sha256 hex>` (24 hex chars).
+- New module `agent_memory_contracts.hygiene` with the
+  `MemoryHygieneReport` schema and two primitives:
+  - `compute_hygiene_report(bundle, *, window_start=None,
+    window_end=None, now=None, conflicts=None)` — compute a
+    snapshot of the bundle's health: per-plane / per-type /
+    per-privacy counts, temporal state (active / stale /
+    expired / superseded), evidence integrity (missing /
+    orphan), and optional conflict counts. Returns a
+    `MemoryHygieneReport`.
+  - `hygiene_report_to_markdown(report)` — format the
+    report as a Markdown document (pure function, no I/O).
+  - Default window: the bundle's full time range (earliest /
+    latest ISO timestamp found in the records, or `now` if no
+    timestamps).
+  - Content-derived id: `hygiene_<sha256 hex>` (24 hex chars).
+- New example `examples/conflict_resolution.py` (~500 lines,
+  runnable) with five worked scenarios: pick-one, merge,
+  split, weekly hygiene report, windowed + diff-augmented
+  hygiene report.
+- New CLI subcommand `hygiene <path> [--from ISO] [--to ISO]
+  [--json]`. Default output is the Markdown report; with
+  `--json`, a structured JSON envelope suitable for
+  programmatic consumption.
+- 86 new tests across `tests/test_conflict.py` (39 tests),
+  `tests/test_hygiene.py` (36 tests), and
+  `tests/test_cli_hygiene.py` (11 tests). The full suite is
+  325 passed + 1 expected skip on Python 3.10/3.11/3.12.
+
+### Changed
+
+- The CLI's top-level `--help` now lists five subcommands
+  (`validate`, `fingerprint`, `diff`, `merge`, `hygiene`)
+  instead of four.
+- The CLI's top-level description and module docstring are
+  updated to mention the `hygiene` subcommand.
+- `pyproject.toml`: `version = "0.7.0"`.
+- `__init__.py`: `__version__ = "0.7.0"`, and the new public
+  API symbols are exported (see "Added" above).
+
+### Design notes
+
+- The user said "keep the variants, we'll compress them at
+  some point." This drove the `apply_resolutions` design:
+  the chosen record is added, the rejected variants stay
+  in the bundle flagged. The audit chain is preserved in
+  the bundle itself, not in a side-table. Compressing the
+  rejected variants into a single audit record is
+  deferred to a future release.
+- The "merge" and "split" sentinel cases were designed as
+  best-judgment choices (the user said "use best
+  judgment, these are truly unknowns"). Future releases
+  may tighten or relax these policies based on product
+  feedback.
+
 ## [0.6.0] - 2026-06-06
 
 ### Added
