@@ -692,3 +692,63 @@ plan is a mirror of the v0.7.0 cadence. I have a clear sprint.
 Sign off as-is, list inline overrides, or let's talk about the
 three bigger questions. From your "go" to a tagged v0.8.0 is
 1-2 days solo.
+
+---
+
+## Decisions applied to this sprint
+
+Applied 2026-06-06 per the user's "go with best judgment"
+mandate. Recorded here so the spec stays the source of truth for
+"why was this built this way" review.
+
+### 9 small decisions (all defaults)
+
+1. **Module name:** `citations.py`.
+2. **Node-kind discriminator:** `node_kind`.
+3. **Default traversal direction:** `"forward"`.
+4. **`traverse` return shape:** `list[CitationPath]`.
+5. **Default claim predicate:** any record with
+   `evidence_span_ids` or `evidence_id` (includes candidates,
+   ledger entries, taste cards, and context packs).
+6. **Default source predicate:** `SourceRecord OR EpisodeRecord`.
+7. **Dangling-ref shape:** tuple on graph
+   (`graph.dangling_refs`) + free function
+   `find_dangling_refs(bundle)` for ergonomic call sites.
+8. **Export `DanglingRef` from `__init__.py`:** yes.
+9. **CLI subcommand for citations:** deferred to v0.8.1.
+
+### 3 bigger-question decisions (all defaults)
+
+- **"Claim = any record with `evidence_span_ids`"** — kept the
+  inclusive default. `ContextPack`s are first-class claims; a
+  product that wants to exclude them passes a custom
+  `claim_predicate`. The schema requires at least one
+  `evidence_span_id` on a `ContextPack`, so a context pack
+  without evidence is degenerate (and the predicate would
+  already catch it as unsupported).
+- **`find_unused_sources` includes `EpisodeRecord`s by
+  default** — kept the inclusive default. An unused episode is
+  a real cost (storage, retrieval) and the product can filter
+  to `SourceRecord`-only with a custom `source_predicate`.
+- **No cycle handling** — kept the "raise on cycle" default.
+  `from_bundle` raises `ValueError` with the cycle identified;
+  the user fixes the bundle. Rationale: a silent elision would
+  hide the bug that introduced the cycle; the library's role
+  is to surface the problem, not paper over it.
+
+### Minor implementation choices (not in the open questions)
+
+- **Id format for `DanglingRef`:** content-derived SHA-256 is
+  overkill for a transient analysis artifact, so `DanglingRef`
+  has no `id` field. It's a value object, not a record type.
+- **`from_bundle` accepts both `Bundle` and `dict`:** the
+  existing `Bundle` type in `bundles.py` is the canonical input;
+  raw `dict` is also accepted for callers that haven't gone
+  through the typed constructors. Both paths produce the same
+  graph.
+- **Graph traversal returns `list[CitationPath]`, not a
+  generator:** the result is typically small (a few paths per
+  claim) and the determinism of `list` (stable iteration order)
+  matters for the product UX. A generator helper is a future
+  addition if a use case shows up.
+
