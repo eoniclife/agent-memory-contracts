@@ -127,8 +127,21 @@ from .citations import (
     find_unused_sources,
     find_unsupported_claims,
 )
+from .access import (
+    PRIVACY_CLASS_ORDER,
+    AccessDecision,
+    AccessSummary,
+    BundleScope,
+    check_access,
+    customer_scope,
+    private_scope,
+    public_scope,
+    scope_bundle,
+    summarize_access,
+    team_scope,
+)
 
-__version__ = "0.8.0"
+__version__ = "0.9.0"
 
 __all__ = [
     # Evidence plane
@@ -225,4 +238,16 @@ __all__ = [
     "find_dangling_refs",
     "default_claim_predicate",
     "default_source_predicate",
+    # Access control (added in 0.9.0)
+    "PRIVACY_CLASS_ORDER",
+    "BundleScope",
+    "AccessDecision",
+    "AccessSummary",
+    "check_access",
+    "scope_bundle",
+    "summarize_access",
+    "public_scope",
+    "team_scope",
+    "customer_scope",
+    "private_scope",
 ]

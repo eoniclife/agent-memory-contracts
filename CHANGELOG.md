@@ -124,6 +124,94 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - No graph analytics (PageRank, centrality, clustering).
 - No cycle handling. DAG is structural; cycles raise.
 
+## [0.9.0] - 2026-06-06
+
+### Added
+
+- New module `agent_memory_contracts.access` with the
+  access control + bundle scope primitives:
+  - `PRIVACY_CLASS_ORDER` (tuple of strings) — the
+    canonical linear ordering of the 5 privacy classes
+    from least to most restricted:
+    `public < internal < private < sensitive < highly_sensitive`.
+  - `BundleScope` (frozen dataclass) — a description of
+    the "view" of a bundle. Three fields:
+    `max_privacy_class`, `allowed_record_types`
+    (optional), and `name` (human-readable label).
+    Validates `max_privacy_class` at construction.
+  - `AccessDecision` (frozen dataclass) — the per-record
+    outcome of a scope check, with `record_id`, `action`
+    (`"allow" | "redact" | "drop"`), and `reason`
+    (human-readable English).
+  - `AccessSummary` (frozen dataclass) — aggregate
+    counts from a list of `AccessDecision`s: `total`,
+    `allowed`, `redacted`, `dropped`,
+    `by_privacy_class`, `by_action`.
+  - `check_access(record, scope)` — per-record scope
+    check. Returns an `AccessDecision`. Raises
+    `ValueError` on an unknown `privacy_class` (a
+    contract violation).
+  - `scope_bundle(bundle, scope)` — whole-bundle
+    filter. Returns a 2-tuple `(filtered_bundle,
+    decisions_list)`. The filtered bundle preserves
+    the input order; the decisions list is the
+    per-record decisions in the same order.
+  - `summarize_access(decisions)` — aggregate counts
+    from a list of decisions into an `AccessSummary`.
+  - Four scope factories:
+    - `public_scope()` — allows only `public` records
+    - `team_scope()` — allows up to `internal` (the default)
+    - `customer_scope()` — allows up to `private`
+    - `private_scope()` — allows all 5 classes
+- New `examples/access.py` — worked example covering
+  all 4 scope factories and a custom record-type
+  filter.
+
+### Behavioral notes
+
+- **"Drop, never redact"** is the v0.9.0 default.
+  Whole-record only: a record is allowed or dropped,
+  not partially redacted. The `action="redact"` enum
+  value is reserved in the public surface for a
+  future sprint that adds field-level redaction.
+- **Linear privacy-class ordering** is the v0.9.0
+  shape. The 5 classes in `PRIVACY_CLASSES` are
+  ordered strictly.
+- A record without a `privacy_class` field is
+  treated as `"internal"` (the library's working
+  default for un-classified data).
+- Both dataclass records and dict/Mapping records
+  are accepted by `check_access` and `scope_bundle`
+  via shape-based dispatch.
+
+### Test discipline
+
+- 32 new tests in `tests/test_access.py` covering:
+  privacy class ordering, scope construction
+  validation, the 4 scope factories, per-record
+  access checks, dict-form records, whole-bundle
+  filtering with order preservation, summary
+  aggregation, and public API exports.
+- Total: 400 tests passing (was 368 in v0.8.0),
+  1 expected skip. `mypy --strict` clean on all
+  24 source files.
+
+### Out of scope for v0.9.0
+
+- No field-level redaction. Whole-record only.
+- No user/team/role model. `BundleScope` is a
+  *classification* primitive, not a *principal*
+  primitive. The product maps principals to
+  scopes.
+- No signed envelopes / encryption / decryption.
+  Scope filtering is a data-classification layer.
+- No audit log. `AccessDecision` is returned; the
+  product persists it.
+- No new privacy classes. The 5 in `PRIVACY_CLASSES`
+  are the surface; adding a class is a schema change.
+- No `access` CLI subcommand. Primitives are
+  library-only.
+
 ## [0.7.0] - 2026-06-06
 
 ### Added

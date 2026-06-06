@@ -687,7 +687,10 @@ class TestPublicApi(unittest.TestCase):
 
     def test_version_bumped_to_080(self) -> None:
         import agent_memory_contracts as a
-        self.assertEqual(a.__version__, "0.8.0")
+        # Version is at least 0.8.0 (the citation graph release);
+        # later sprints may bump it further.
+        from packaging.version import Version
+        self.assertGreaterEqual(Version(a.__version__), Version("0.8.0"))
 
 
 if __name__ == "__main__":
