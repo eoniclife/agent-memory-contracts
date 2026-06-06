@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Iterable
+from typing import Any, Iterable, Protocol, TypeVar, cast
 
 from .ledger_ids import make_ledger_entry_id, make_reducer_decision_id
+
+T = TypeVar("T")
 
 SCHEMA_VERSION = "1.0.0"
 
@@ -40,7 +42,7 @@ CANDIDATE_ONLY_FIELDS = {
 }
 
 
-def _require(condition: bool, message: str) -> None:
+def _require(condition: object, message: str) -> None:
     if not condition:
         raise ValueError(message)
 
@@ -78,7 +80,7 @@ def _object(name: str, value: dict[str, Any]) -> None:
     _require(isinstance(value, dict), f"{name} must be object")
 
 
-def _build_record(cls: type, data: dict[str, Any]):
+def _build_record(cls: type[T], data: dict[str, Any]) -> T:
     try:
         return cls(**data)
     except TypeError as exc:
@@ -321,7 +323,12 @@ class DecisionLedgerEntry(LedgerEntryBase):
         _require(self.reversibility in REVERSIBILITY, "invalid reversibility")
 
 
-LEDGER_CLASS_BY_TYPE = {
+class _LedgerEntryFromDict(Protocol):
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> LedgerEntryBase: ...
+
+
+LEDGER_CLASS_BY_TYPE: dict[str, _LedgerEntryFromDict] = {
     "fact": FactLedgerEntry,
     "preference": PreferenceLedgerEntry,
     "decision": DecisionLedgerEntry,
@@ -336,7 +343,7 @@ def ledger_entry_from_dict(data: dict[str, Any]) -> LedgerEntryBase:
     _assert_no_candidate_only_fields(data)
     ledger_type = data.get("ledger_type")
     _require(ledger_type in LEDGER_CLASS_BY_TYPE, "invalid ledger_type")
-    return LEDGER_CLASS_BY_TYPE[ledger_type].from_dict(data)
+    return LEDGER_CLASS_BY_TYPE[cast(str, ledger_type)].from_dict(data)
 
 
 def _validate_span_refs(record: Any, span_ids: Iterable[str], spans_by_id: dict[str, dict[str, Any]]) -> None:
@@ -435,4 +442,8 @@ def validate_ledger_bundle(
             _require(entry.id in newer.supersedes, "non-reciprocal supersession link")
             _require(newer.valid_from is not None, "supersession successor requires valid_from")
             _require(entry.valid_until is not None, "superseded entry requires valid_until")
-            _require(parse_iso8601(entry.valid_until) <= parse_iso8601(newer.valid_from), "superseded entry valid_until must be <= successor valid_from")
+            _require(
+                parse_iso8601(cast(str, entry.valid_until))
+                <= parse_iso8601(cast(str, newer.valid_from)),
+                "superseded entry valid_until must be <= successor valid_from",
+            )

@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from typing import Any, TypeVar
 
 from .evidence_ids import make_episode_id, make_source_id, make_span_id
+
+T = TypeVar("T")
 
 SCHEMA_VERSION = "1.0.0"
 
@@ -57,7 +59,7 @@ EPISODE_LOCATOR_KINDS = {
 EXCERPT_POLICIES = {"none", "synthetic", "redacted", "short_quote_allowed"}
 
 
-def _require(condition: bool, message: str) -> None:
+def _require(condition: object, message: str) -> None:
     if not condition:
         raise ValueError(message)
 
@@ -86,7 +88,7 @@ def _validate_sha256(name: str, value: str) -> None:
     int(value, 16)
 
 
-def _build_record(cls: type, data: dict[str, Any]):
+def _build_record(cls: type[T], data: dict[str, Any]) -> T:
     try:
         return cls(**data)
     except TypeError as exc:

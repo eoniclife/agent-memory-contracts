@@ -35,9 +35,9 @@ class BundleDiff:
             identical content.
     """
 
-    added: list[dict] = field(default_factory=list)
-    removed: list[dict] = field(default_factory=list)
-    changed: list[tuple[dict, dict]] = field(default_factory=list)
+    added: list[dict[str, Any]] = field(default_factory=list)
+    removed: list[dict[str, Any]] = field(default_factory=list)
+    changed: list[tuple[dict[str, Any], dict[str, Any]]] = field(default_factory=list)
     unchanged_count: int = 0
 
 
@@ -72,6 +72,17 @@ def bundle_diff(
     a_list = list(a)
     b_list = list(b)
 
+    # Build id -> canonical_json maps (last-write-wins for dupes).
+    a_by_id: dict[str, str] = {}
+    for record in a_list:
+        id_val, canonical = _canonical_record(record, id_field)
+        a_by_id[id_val] = canonical
+
+    b_by_id: dict[str, str] = {}
+    for record in b_list:
+        id_val, canonical = _canonical_record(record, id_field)
+        b_by_id[id_val] = canonical
+
     # Short-circuit: equal fingerprints mean identical bundles.
     # We still need to compute the correct unchanged_count even
     # when fingerprints match (a=[r,r] and b=[r] have the same fp
@@ -79,14 +90,6 @@ def bundle_diff(
     fp_a = bundle_fingerprint(a_list, id_field=id_field)
     fp_b = bundle_fingerprint(b_list, id_field=id_field)
     if fp_a == fp_b:
-        a_by_id: dict[str, str] = {}
-        for record in a_list:
-            id_val, canonical = _canonical_record(record, id_field)
-            a_by_id[id_val] = canonical
-        b_by_id: dict[str, str] = {}
-        for record in b_list:
-            id_val, canonical = _canonical_record(record, id_field)
-            b_by_id[id_val] = canonical
         unchanged_count = sum(
             1
             for id_val in a_by_id
@@ -99,17 +102,6 @@ def bundle_diff(
             unchanged_count=unchanged_count,
         )
 
-    # Build id -> canonical_json maps (last-write-wins for dupes).
-    a_by_id: dict[str, str] = {}
-    for record in a_list:
-        id_val, canonical = _canonical_record(record, id_field)
-        a_by_id[id_val] = canonical
-
-    b_by_id: dict[str, str] = {}
-    for record in b_list:
-        id_val, canonical = _canonical_record(record, id_field)
-        b_by_id[id_val] = canonical
-
     a_ids = set(a_by_id)
     b_ids = set(b_by_id)
 
@@ -117,15 +109,15 @@ def bundle_diff(
     removed_ids = a_ids - b_ids
     common_ids = a_ids & b_ids
 
-    added: list[dict] = []
+    added: list[dict[str, Any]] = []
     for id_val in added_ids:
         added.append(json.loads(b_by_id[id_val]))
 
-    removed: list[dict] = []
+    removed: list[dict[str, Any]] = []
     for id_val in removed_ids:
         removed.append(json.loads(a_by_id[id_val]))
 
-    changed: list[tuple[dict, dict]] = []
+    changed: list[tuple[dict[str, Any], dict[str, Any]]] = []
     unchanged_count = 0
     for id_val in common_ids:
         a_canon = a_by_id[id_val]

@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Iterable
+from typing import Any, Iterable, TypeVar, cast
 
 from .taste_ids import make_taste_card_id, make_taste_reducer_decision_id
+
+T = TypeVar("T")
 
 SCHEMA_VERSION = "1.0.0"
 
@@ -52,7 +54,7 @@ TRUSTED_MEMORY_REFERENCE_FIELDS = {
 }
 
 
-def _require(condition: bool, message: str) -> None:
+def _require(condition: object, message: str) -> None:
     if not condition:
         raise ValueError(message)
 
@@ -90,7 +92,7 @@ def _object(name: str, value: dict[str, Any]) -> None:
     _require(isinstance(value, dict), f"{name} must be object")
 
 
-def _build_record(cls: type, data: dict[str, Any]):
+def _build_record(cls: type[T], data: dict[str, Any]) -> T:
     try:
         return cls(**data)
     except TypeError as exc:
@@ -406,7 +408,11 @@ def validate_taste_bundle(
             _require(card.id in newer.supersedes, "non-reciprocal supersession link")
             _require(newer.valid_from is not None, "supersession successor requires valid_from")
             _require(card.valid_until is not None, "superseded TasteCard requires valid_until")
-            _require(parse_iso8601(card.valid_until) <= parse_iso8601(newer.valid_from), "superseded TasteCard valid_until must be <= successor valid_from")
+            _require(
+                parse_iso8601(cast(str, card.valid_until))
+                <= parse_iso8601(cast(str, newer.valid_from)),
+                "superseded TasteCard valid_until must be <= successor valid_from",
+            )
 
 
 def is_taste_card_active_at(card: dict[str, Any], query_time: str) -> bool:

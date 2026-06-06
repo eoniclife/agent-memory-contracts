@@ -99,7 +99,7 @@ def _is_jsonl_path(path: Path, text: str) -> bool:
     return True
 
 
-def read_bundle(path: Path) -> list[dict]:
+def read_bundle(path: Path) -> list[dict[str, Any]]:
     """Load a bundle of record dicts from a JSON or JSONL file.
 
     - ``.jsonl`` (or JSONL by sniff): one record per line, blank lines
@@ -116,7 +116,7 @@ def read_bundle(path: Path) -> list[dict]:
     """
     text = path.read_text(encoding="utf-8")
     if _is_jsonl_path(path, text):
-        records: list[dict] = []
+        records: list[dict[str, Any]] = []
         for ln, raw in enumerate(text.splitlines(), start=1):
             line = raw.strip()
             if not line:
@@ -354,7 +354,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
         return 1
 
     try:
-        errors = validate_instance(
+        instance_errors = validate_instance(
             payload, args.schema, raise_on_error=False
         )
     except SchemaNotFoundError as exc:
@@ -377,15 +377,15 @@ def cmd_validate(args: argparse.Namespace) -> int:
         else:
             print(f"validate: {exc}", file=sys.stderr)
         return 1
-    if errors:
+    if instance_errors:
         if args.json:
             _emit_json(
                 {"ok": False, "schema": args.schema, "path": str(path),
-                 "mode": "json", "errors": errors},
+                 "mode": "json", "errors": instance_errors},
                 to_stderr=True,
             )
         else:
-            _print_errors_to_stderr(errors)
+            _print_errors_to_stderr(instance_errors)
         return 1
     if args.json:
         _emit_json(
@@ -543,7 +543,7 @@ def cmd_merge(args: argparse.Namespace) -> int:
                 print(f"merge: file not found: {p}", file=sys.stderr)
             return 1
 
-    bundles: list[list[dict]] = []
+    bundles: list[list[dict[str, Any]]] = []
     for p in paths:
         try:
             bundles.append(read_bundle(p))

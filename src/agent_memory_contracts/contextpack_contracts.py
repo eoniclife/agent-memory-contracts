@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from typing import Any, TypeVar
 
 from .contextpack_ids import (
     canonical_payload,
@@ -13,6 +13,8 @@ from .contextpack_ids import (
     make_context_pack_validation_report_id,
 )
 from .evidence_ids import sha256_hex
+
+T = TypeVar("T")
 
 SCHEMA_VERSION = "1.0.0"
 
@@ -57,7 +59,7 @@ CONTEXT_FORBIDDEN_FIELDS = {
 }
 
 
-def _require(condition: bool, message: str) -> None:
+def _require(condition: object, message: str) -> None:
     if not condition:
         raise ValueError(message)
 
@@ -89,7 +91,7 @@ def _object(name: str, value: dict[str, Any]) -> None:
     _require(isinstance(value, dict), f"{name} must be object")
 
 
-def _build_record(cls: type, data: dict[str, Any]):
+def _build_record(cls: type[T], data: dict[str, Any]) -> T:
     try:
         return cls(**data)
     except TypeError as exc:

@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Iterable
+from typing import Any, Iterable, TypeVar, cast
 
 from .ledger_contracts import ledger_entry_from_dict
 from .state_ids import make_core_state_id, make_project_state_id, make_state_reducer_decision_id
 from .taste_contracts import taste_card_from_dict
+
+T = TypeVar("T")
 
 SCHEMA_VERSION = "1.0.0"
 
@@ -41,7 +43,7 @@ FORBIDDEN_FIELDS = {
 }
 
 
-def _require(condition: bool, message: str) -> None:
+def _require(condition: object, message: str) -> None:
     if not condition:
         raise ValueError(message)
 
@@ -81,7 +83,7 @@ def _object(name: str, value: dict[str, Any]) -> None:
     _require(isinstance(value, dict), f"{name} must be object")
 
 
-def _build_record(cls: type, data: dict[str, Any]):
+def _build_record(cls: type[T], data: dict[str, Any]) -> T:
     try:
         return cls(**data)
     except TypeError as exc:
@@ -526,7 +528,11 @@ def _validate_supersession_family(states_by_id: dict[str, StateSnapshotBase]) ->
             _require(state.id in newer.supersedes, "non-reciprocal supersession link")
             _require(newer.valid_from is not None, "supersession successor requires valid_from")
             _require(state.valid_until is not None, "superseded state requires valid_until")
-            _require(parse_iso8601(state.valid_until) <= parse_iso8601(newer.valid_from), "superseded state valid_until must be <= successor valid_from")
+            _require(
+                parse_iso8601(cast(str, state.valid_until))
+                <= parse_iso8601(cast(str, newer.valid_from)),
+                "superseded state valid_until must be <= successor valid_from",
+            )
 
 
 def validate_state_bundle(
@@ -611,8 +617,8 @@ def validate_state_bundle(
                 "StateReducerDecision target_core_state_ids must match targeted snapshot reducer_decision_id",
             )
 
-    _validate_supersession_family(projects_by_id)
-    _validate_supersession_family(cores_by_id)
+    _validate_supersession_family(cast(dict[str, StateSnapshotBase], projects_by_id))
+    _validate_supersession_family(cast(dict[str, StateSnapshotBase], cores_by_id))
     _validate_current_project_uniqueness(projects_by_id)
     _validate_current_core_uniqueness(cores_by_id)
 

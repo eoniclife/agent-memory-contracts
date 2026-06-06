@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Iterable
+from typing import Any, Iterable, cast
 
 from .candidate_contracts import candidate_from_dict
 from .contextpack_contracts import (
@@ -20,7 +20,7 @@ from .state_contracts import core_state_from_dict, project_state_from_dict
 from .taste_contracts import taste_card_from_dict
 
 
-def _require(condition: bool, message: str) -> None:
+def _require(condition: object, message: str) -> None:
     if not condition:
         raise ValueError(message)
 
@@ -62,6 +62,7 @@ def _validate_span_refs(pack: ContextPack, spans_by_id: dict[str, Any], sources_
     def validate_span(span_id: str, label: str) -> None:
         span = spans_by_id.get(span_id)
         _require(span is not None, f"ContextPack references missing {label} EvidenceSpan: {span_id}")
+        assert span is not None  # narrowing for mypy
         _require(span.source_id in declared_source_ids, f"EvidenceSpan source_id is not declared in ContextPack evidence sources: {span_id}")
         if span.episode_id is not None:
             _require(span.episode_id in declared_episode_ids, f"EvidenceSpan episode_id is not declared in ContextPack evidence episodes: {span_id}")
@@ -96,11 +97,13 @@ def _taste_ids(pack: ContextPack) -> list[str]:
 
 
 def _project_state_ids(pack: ContextPack) -> list[str]:
-    return pack.state["project_state_ids"] + pack.stale_or_superseded["project_state_ids"]
+    return cast(
+        list[str], pack.state["project_state_ids"] + pack.stale_or_superseded["project_state_ids"]
+    )
 
 
 def _core_state_ids(pack: ContextPack) -> list[str]:
-    current = [pack.state["core_state_id"]] if pack.state["core_state_id"] else []
+    current = [cast(str, pack.state["core_state_id"])] if pack.state["core_state_id"] else []
     return current + pack.stale_or_superseded["core_state_ids"]
 
 
@@ -128,6 +131,7 @@ def _validate_candidate_context(pack: ContextPack, candidates_by_id: dict[str, A
         for candidate_id in pack.candidate_context[field]:
             candidate = candidates_by_id.get(candidate_id)
             _require(candidate is not None, f"ContextPack references missing candidate: {candidate_id}")
+            assert candidate is not None  # narrowing for mypy after _require
             _require(candidate.candidate_type == candidate_type, f"candidate {candidate_id} is in wrong candidate_context section")
 
 
@@ -144,20 +148,24 @@ def _validate_current_memory(pack: ContextPack, ledgers_by_id: dict[str, Any], t
         for ledger_id in pack.trusted_memory[field]:
             record = ledgers_by_id.get(ledger_id)
             _require(record is not None, f"ContextPack references missing ledger entry: {ledger_id}")
+            assert record is not None  # narrowing for mypy after _require
             _require(record.ledger_type == ledger_type, f"ledger {ledger_id} is in wrong trusted_memory section")
             _require(_is_active_at(record, query_time), f"trusted ledger entry is not active at pack creation: {ledger_id}")
     for taste_id in pack.trusted_memory["taste_card_ids"]:
         record = taste_by_id.get(taste_id)
         _require(record is not None, f"ContextPack references missing TasteCard: {taste_id}")
+        assert record is not None  # narrowing for mypy after _require
         _require(_is_active_at(record, query_time), f"trusted TasteCard is not active at pack creation: {taste_id}")
     for project_state_id in pack.state["project_state_ids"]:
         record = projects_by_id.get(project_state_id)
         _require(record is not None, f"ContextPack references missing ProjectStateSnapshot: {project_state_id}")
+        assert record is not None  # narrowing for mypy after _require
         _require(_is_active_at(record, query_time), f"ProjectStateSnapshot is not active at pack creation: {project_state_id}")
     core_state_id = pack.state["core_state_id"]
     if core_state_id:
         record = cores_by_id.get(core_state_id)
         _require(record is not None, f"ContextPack references missing CoreStateSnapshot: {core_state_id}")
+        assert record is not None  # narrowing for mypy after _require
         _require(_is_active_at(record, query_time), f"CoreStateSnapshot is not active at pack creation: {core_state_id}")
 
 
@@ -167,18 +175,22 @@ def _validate_stale_or_superseded(pack: ContextPack, ledgers_by_id: dict[str, An
         for ledger_id in pack.stale_or_superseded[field]:
             record = ledgers_by_id.get(ledger_id)
             _require(record is not None, f"ContextPack references missing stale ledger entry: {ledger_id}")
+            assert record is not None  # narrowing for mypy after _require
             _require(record.status in allowed, f"stale_or_superseded ledger has invalid status: {ledger_id}")
     for taste_id in pack.stale_or_superseded["taste_card_ids"]:
         record = taste_by_id.get(taste_id)
         _require(record is not None, f"ContextPack references missing stale TasteCard: {taste_id}")
+        assert record is not None  # narrowing for mypy after _require
         _require(record.status in allowed, f"stale_or_superseded TasteCard has invalid status: {taste_id}")
     for project_state_id in pack.stale_or_superseded["project_state_ids"]:
         record = projects_by_id.get(project_state_id)
         _require(record is not None, f"ContextPack references missing stale ProjectStateSnapshot: {project_state_id}")
+        assert record is not None  # narrowing for mypy after _require
         _require(record.status in allowed, f"stale_or_superseded ProjectStateSnapshot has invalid status: {project_state_id}")
     for core_state_id in pack.stale_or_superseded["core_state_ids"]:
         record = cores_by_id.get(core_state_id)
         _require(record is not None, f"ContextPack references missing stale CoreStateSnapshot: {core_state_id}")
+        assert record is not None  # narrowing for mypy after _require
         _require(record.status in allowed, f"stale_or_superseded CoreStateSnapshot has invalid status: {core_state_id}")
 
 

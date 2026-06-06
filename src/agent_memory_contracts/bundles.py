@@ -64,7 +64,7 @@ def _canonical_record(record: Any, id_field: str) -> tuple[str, str]:
         id_value = rec_dict.get(id_field, "")
     else:
         # Last resort: try to use it as a Mapping protocol.
-        rec_dict = dict(record)  # type: ignore[arg-type]
+        rec_dict = dict(record)
         id_value = rec_dict.get(id_field, "")
     canonical = json.dumps(
         rec_dict,

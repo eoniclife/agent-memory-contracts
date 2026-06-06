@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Iterable
+from typing import Any, Iterable, Protocol, TypeVar, cast
 
 from .candidate_ids import make_candidate_id
+
+T = TypeVar("T")
 
 SCHEMA_VERSION = "1.0.0"
 
@@ -42,7 +44,7 @@ FORBIDDEN_TRUSTED_MEMORY_KEYS = {
 }
 
 
-def _require(condition: bool, message: str) -> None:
+def _require(condition: object, message: str) -> None:
     if not condition:
         raise ValueError(message)
 
@@ -83,7 +85,7 @@ def _object(name: str, value: dict[str, Any]) -> None:
     _require(isinstance(value, dict), f"{name} must be object")
 
 
-def _build_record(cls: type, data: dict[str, Any]):
+def _build_record(cls: type[T], data: dict[str, Any]) -> T:
     try:
         return cls(**data)
     except TypeError as exc:
@@ -348,7 +350,12 @@ class CandidateTasteSignal(CandidateBase):
         _require(self.strength_hint in STRENGTH_HINTS, "invalid strength_hint")
 
 
-CLASS_BY_TYPE = {
+class _CandidateFromDict(Protocol):
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> CandidateBase: ...
+
+
+CLASS_BY_TYPE: dict[str, _CandidateFromDict] = {
     "claim": CandidateClaim,
     "preference": CandidatePreference,
     "decision": CandidateDecision,
@@ -361,7 +368,7 @@ def candidate_from_dict(data: dict[str, Any]) -> CandidateBase:
     _assert_no_forbidden_keys(data)
     candidate_type = data.get("candidate_type")
     _require(candidate_type in CLASS_BY_TYPE, "invalid candidate_type")
-    return CLASS_BY_TYPE[candidate_type].from_dict(data)
+    return CLASS_BY_TYPE[cast(str, candidate_type)].from_dict(data)
 
 
 def candidate_auxiliary_span_ids(candidate: CandidateBase) -> list[str]:

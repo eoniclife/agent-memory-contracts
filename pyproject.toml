@@ -41,6 +41,7 @@ dependencies = []  # standard-library only
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
+    "mypy>=1.10",
 ]
 jsonschema = [
     "jsonschema>=4.0",
@@ -63,3 +64,17 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-ra -q"
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_unused_ignores = true
+warn_return_any = true
+no_implicit_optional = true
+files = ["src/agent_memory_contracts"]
+
+# Tests and examples are not part of the published library API
+# surface and are excluded from strict type-checking.
+[[tool.mypy.overrides]]
+module = ["tests.*", "examples.*"]
+ignore_errors = true

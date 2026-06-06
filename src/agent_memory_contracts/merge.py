@@ -77,8 +77,8 @@ class BundleMerge:
             position).
     """
 
-    records: list[dict] = field(default_factory=list)
-    conflicts: list[tuple[str, list[tuple[int, dict]]]] = field(default_factory=list)
+    records: list[dict[str, Any]] = field(default_factory=list)
+    conflicts: list[tuple[str, list[tuple[int, dict[str, Any]]]]] = field(default_factory=list)
     duplicate_ids: list[str] = field(default_factory=list)
 
 
@@ -151,8 +151,8 @@ def merge_bundles(
     #   duplicate_seen: whether this id was duplicated *within* a
     #     single bundle.
     winning_canonical: dict[str, str] = {}
-    winning_dict: dict[str, dict] = {}
-    contributing: dict[str, list[tuple[int, dict]]] = {}
+    winning_dict: dict[str, dict[str, Any]] = {}
+    contributing: dict[str, list[tuple[int, dict[str, Any]]]] = {}
     bundle_indices_seen: dict[str, list[int]] = {}
     duplicate_ids_in_order: list[str] = []
     duplicate_seen: set[str] = set()
@@ -160,7 +160,7 @@ def merge_bundles(
     for bundle_index, bundle in enumerate(bundles):
         # Per-bundle last-write-wins.
         per_bundle_winner: dict[str, str] = {}
-        per_bundle_dict: dict[str, dict] = {}
+        per_bundle_dict: dict[str, dict[str, Any]] = {}
         per_bundle_order: list[str] = []  # first-seen order in this bundle
 
         for record in bundle:
@@ -228,7 +228,7 @@ def merge_bundles(
     # list by canonicalising each entry's dict and grouping equal
     # values. To keep this O(n) per id, we re-canonicalise each
     # contributing dict and dedupe.
-    conflicts: list[tuple[str, list[tuple[int, dict]]]] = []
+    conflicts: list[tuple[str, list[tuple[int, dict[str, Any]]]]] = []
     for id_value, entries in contributing.items():
         # Group by canonical. If > 1 group, this is a conflict.
         # We do not re-canonicalise; we compare dict equality
@@ -243,7 +243,7 @@ def merge_bundles(
         # is always true. Use dict equality directly: two records
         # with the same canonical JSON will compare equal as
         # dicts.
-        unique_dicts: list[dict] = []
+        unique_dicts: list[dict[str, Any]] = []
         for _idx, rec in entries:
             if rec not in unique_dicts:
                 unique_dicts.append(rec)

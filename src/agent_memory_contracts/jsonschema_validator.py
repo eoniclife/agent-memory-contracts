@@ -41,10 +41,10 @@ from pathlib import Path
 from typing import Any, Iterable, Iterator, Mapping
 
 try:
-    import jsonschema  # type: ignore[import-not-found]
+    import jsonschema  # type: ignore[import-untyped]
 except ImportError as _exc:  # pragma: no cover
     _MISSING_IMPORT_ERROR: Exception | None = _exc
-    jsonschema = None  # type: ignore[assignment]
+    jsonschema = None
 else:
     _MISSING_IMPORT_ERROR = None
 
@@ -141,7 +141,7 @@ def load_schema(name: str) -> dict[str, Any]:
             f"schema resource not found in package: "
             f"{_SCHEMA_PACKAGE}/{name}.schema.json"
         )
-    return json.loads(resource.read_text(encoding="utf-8"))
+    return json.loads(resource.read_text(encoding="utf-8"))  # type: ignore[no-any-return]
 
 
 def _format_error(error: Any) -> str:
@@ -186,9 +186,9 @@ def validate_instance(
     _require_jsonschema()
     schema = load_schema(schema_name)
     if raise_on_error:
-        jsonschema.validate(instance=dict(instance), schema=schema)  # type: ignore[union-attr]
+        jsonschema.validate(instance=dict(instance), schema=schema)
         return []
-    validator = jsonschema.Draft202012Validator(schema)  # type: ignore[union-attr]
+    validator = jsonschema.Draft202012Validator(schema)
     return [_format_error(e) for e in validator.iter_errors(instance)]
 
 
@@ -228,7 +228,7 @@ def validate_bundle(
     if raise_on_error and errors:
         first_schema, first_errors = next(iter(errors.items()))
         # Raise with the first error from the first failing schema.
-        raise jsonschema.ValidationError(  # type: ignore[union-attr]
+        raise jsonschema.ValidationError(
             f"{first_schema}: {first_errors[0]}"
         )
     return errors
@@ -282,7 +282,7 @@ def validate_jsonl(
                 msg = f"line {line_number}: invalid JSON: {exc}"
                 errors.append((line_number, [msg]))
                 if raise_on_error:
-                    raise jsonschema.ValidationError(  # type: ignore[union-attr]
+                    raise jsonschema.ValidationError(
                         msg
                     )
                 continue
@@ -292,7 +292,7 @@ def validate_jsonl(
             if line_errors:
                 errors.append((line_number, line_errors))
                 if raise_on_error:
-                    raise jsonschema.ValidationError(  # type: ignore[union-attr]
+                    raise jsonschema.ValidationError(
                         f"line {line_number}: {line_errors[0]}"
                     )
     return errors
@@ -301,7 +301,7 @@ def validate_jsonl(
 def iter_validated_jsonl(
     path: str | Path,
     schema_name: str,
-) -> Iterator[tuple[int, dict | list[str]]]:
+) -> Iterator[tuple[int, dict[str, Any] | list[str]]]:
     """Yield one tuple per line of a JSONL file, validated against a bundled schema.
 
     The second element of each yielded tuple is either the parsed
