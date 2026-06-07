@@ -59,6 +59,89 @@ note the decisions you've taken somewhere persistent" (per
   typical results are small and stable iteration order matters
   for product UX.
 
+## Sprint 22 / v0.9.0 — re-pacing decision (2026-06-07)
+
+**Decided:** 2026-06-07
+**Source:** User shared a Hermes analysis of the library
+vs. Mem0 / LangGraph. The analysis identified the
+`ContextPack` compiler as a real gap and recommended
+prioritizing it over more library modules.
+**Stance:** proceeded with 24b (schema migration) per
+the user's stated direction; re-paced the post-24b
+roadmap to put the `ContextPack` compiler next.
+
+### Decisions applied
+
+- **24b (schema migration) proceeds as planned.** The
+  library's v1.0.0 stability promise needs the migration
+  framework to be real. Hermes's argument that "schemas
+  are stable and treated as 1.0.0" is true *today* but
+  doesn't stay true on its own; the migration framework
+  is the safety net for any future schema bump.
+- **Post-24b roadmap is re-shuffled** (was: 24b →
+  v1.0.0 final → v1.1.0 decay → ...; now: 24b →
+  ContextPack compiler → end-to-end demo → v1.0.0 final →
+  LangChain backend → MCP server → v1.1.0 decay). The
+  ContextPack compiler jumps from "later" to "next",
+  because it's the bridge between integrity (what we
+  have) and company brain (what we're building toward),
+  and Hermes's competitive analysis confirmed neither
+  Mem0 nor LangGraph has it.
+- **"Stop adding new library modules" is adopted as a
+  discipline going forward.** 25 modules + 23 schemas +
+  439 tests is enough for a v1.0.0 commitment. New work
+  from here should be (a) v1.0.0 meta-sprints, (b)
+  compiler/orchestration, or (c) integrations.
+- **Sprint specs are kept.** Hermes initially called
+  them "process theater" and retracted it on second
+  look. The spec doc demonstrates structured product
+  thinking and is the audit trail for "why was this
+  built this way" review.
+
+### Where Hermes was right
+
+- The `ContextPack` schema exists but no function compiles
+  a trusted bundle + a task + a scope into a `ContextPack`.
+  That's the missing primitive for the company-brain story.
+- The library is over-engineered if we keep adding
+  modules; the discipline going forward is to ship the
+  v1.0.0 commitment and pivot to integration.
+- The integration story (LangChain, MCP) is more
+  important than another library module.
+
+### Where Hermes was wrong
+
+- The library is not "overbuilt" *as a v1.0.0 artifact*.
+  The citation graph, access control, embedding input,
+  conflict resolution are each first-in-market primitives.
+  Hermes retracted the "over-engineered" claim when
+  comparing to Mem0/LangGraph.
+- Schema migration is not "process theater" — it's the
+  v1.0.0 commitment. Without it, the stability promise is
+  fake.
+- "Get 10 users" is good advice but not a sprint scope.
+  The user research can run in parallel with the v1.0.0
+  work.
+
+### Re-paced roadmap (2026-06-07)
+
+- **24b / v1.0.0-alpha.2** — schema migration framework
+  (in flight)
+- **24c / v1.0.0-alpha.3** — ContextPack compiler
+  (jumped from "v1.1.0 decay"); the bridge between
+  integrity and company brain
+- **24d / v1.0.0-alpha.4** — end-to-end demo (one script,
+  full pipeline)
+- **v1.0.0 final** — stability commitment (SemVer policy
+  doc, public API freeze, CHANGELOG discipline); depends
+  on 24c + 24d
+- **v1.0.1** — LangChain memory backend
+- **v1.0.2** — MCP server
+- **v1.1.0** — decay primitives (was Sprint 25; bumped
+  to make room)
+- **v1.2.0** — stream-friendly diff/merge + storage
+  adapters (unchanged from prior roadmap)
+
 ---
 
 ## Sprint 21 / v0.7.0 — conflict resolution + memory hygiene
