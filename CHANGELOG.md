@@ -124,6 +124,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - No graph analytics (PageRank, centrality, clustering).
 - No cycle handling. DAG is structural; cycles raise.
 
+## [1.0.0-alpha.4] - 2026-06-07
+
+### Added
+
+- **End-to-end company brain demo**
+  (`examples/company_brain_demo.py`). A single Python
+  script that runs the full pipeline from raw
+  sources to a task-ready `ContextPack`. The demo is
+  the marketing artifact for the library's v1.0.0
+  story — what an accelerator partner sees in the
+  5-minute demo.
+
+  The 7 stages:
+  1. **Ingest** — 3 raw sources → 3 `SourceRecord` + 6
+     `EvidenceSpan`.
+  2. **Extract** — Simulated LLM output → 8
+     `CandidateClaim`.
+  3. **Reduce** — Promote 5 to trusted
+     `FactLedgerEntry`; reject 3 (low confidence /
+     stale).
+  4. **Cite** — `CitationGraph.from_bundle`: all 6
+     promoted facts have source chains; 0 dangling
+     refs; 0 unsupported claims.
+  5. **Access** — `team_scope`: 5 of 6 records
+     allowed; 1 dropped (highly_sensitive).
+  6. **Embed** — 5 `EmbeddingInput`s (the input
+     boundary).
+  7. **Compile** — `ContextPack` for the task, with
+     `BuildReceipt` and `ValidationReport` attached.
+
+  The demo is deterministic, ~200 LOC, runs in
+  <5 seconds, uses only the public API, and runs as
+  part of the "all examples" smoke test in CI.
+
+### Out of scope for v1.0.0-alpha.4
+
+- No new library code. The demo uses the existing
+  public API only.
+- No LLM calls. The demo simulates LLM output with
+  hard-coded candidates.
+- No embedding model calls. The demo renders
+  `EmbeddingInput` but doesn't call an embedding
+  model.
+- No vector storage.
+
 ## [1.0.0-alpha.3] - 2026-06-07
 
 ### Added
