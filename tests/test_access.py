@@ -342,7 +342,12 @@ class TestPublicApi(unittest.TestCase):
 
     def test_version_bumped_to_090(self) -> None:
         import agent_memory_contracts as a
-        self.assertEqual(a.__version__, "0.9.0")
+        # v0.9.0 was the access control release. Newer
+        # versions may have bumped further; the test asserts
+        # that the access control release was the
+        # introduction.
+        from packaging.version import Version
+        self.assertGreaterEqual(Version(a.__version__), Version("0.9.0"))
 
 
 if __name__ == "__main__":

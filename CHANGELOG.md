@@ -124,6 +124,89 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - No graph analytics (PageRank, centrality, clustering).
 - No cycle handling. DAG is structural; cycles raise.
 
+## [1.0.0-alpha.1] - 2026-06-07
+
+### Added
+
+- New module `agent_memory_contracts.embedding` with the
+  embedding input + text-rendering primitives:
+  - `EmbeddingInput` (frozen dataclass) — the canonical
+    input to an embedding pipeline. Fields: `record_id`,
+    `record_type`, `text`, `privacy_class`,
+    `content_hash_sha256`, `char_count`, `metadata`,
+    `truncated`, `plane`. Construction validates the
+    invariants.
+  - `record_to_embedding_input(record, *, max_chars=8192)`
+    — dispatches on record type and returns a frozen
+    `EmbeddingInput`. Supports both dataclass and dict
+    record forms.
+  - `text_for_record_type(record)` — the public per-type
+    renderer. 12 hand-crafted renderers (SourceRecord,
+    EpisodeRecord, EvidenceSpan, CandidateClaim,
+    CandidateDecision, CandidatePreference, CandidateTask,
+    CandidateTasteSignal, FactLedgerEntry,
+    DecisionLedgerEntry, PreferenceLedgerEntry, TasteCard,
+    ContextPack) plus a generic "key: value" fallback.
+  - `embedding_input_to_dict(ei)` and
+    `embedding_input_from_dict(data)` — JSON-friendly
+    round-trip helpers for the product to persist
+    embedding inputs to disk between runs.
+  - `DEFAULT_MAX_CHARS` — the default 8192-char limit on
+    the rendered text. Generous for most embedding models,
+    conservative for the long-input models.
+
+### Behavioral notes
+
+- **Determinism.** Two records with the same content
+  produce the same `text` and the same
+  `content_hash_sha256`. List-of-strings fields are sorted
+  before joining; the generic renderer sorts fields by
+  key. Same text -> SHA-256 hash -> dedup key.
+- **Truncation.** Text exceeding `max_chars` is cut at
+  the last sentence boundary within the last 200 chars of
+  the cut point, with a hard cut as fallback. The
+  `"...[truncated]"` marker is appended. The
+  `truncated=True` field is set on the result.
+- **Privacy surfacing.** The `privacy_class` field on
+  `EmbeddingInput` defaults to `"internal"` for records
+  that don't carry the field. The product uses
+  `BundleScope` from v0.9.0 to decide which records to
+  embed.
+- **Metadata structure.** Flat `Mapping[str, str | int |
+  float | bool]`. No nested dicts, no lists. Compatible
+  with any vector DB filter API (Pinecone, Weaviate,
+  Qdrant, FAISS, etc.).
+- **Audit records embeddable.** `MemoryReducerDecision`,
+  `ContextPackBuildReceipt`, etc. fall back to the
+  generic renderer. The product decides whether to
+  actually embed them (typically no).
+
+### Test discipline
+
+- 39 new tests in `tests/test_embedding.py` covering:
+  frozen-dataclass surface and invariants, all 12
+  per-type renderers, the generic fallback, determinism
+  (dataclass and dict forms), truncation at the sentence
+  boundary, privacy class surfacing, metadata structure,
+  to_dict / from_dict round-trip including JSON-clean
+  serialization, empty-record handling, and public API
+  exports.
+- Total: 439 tests passing (was 400 in v0.9.0), 1
+  expected skip. `mypy --strict` clean on all 25 source
+  files.
+
+### Out of scope for v1.0.0-alpha.1
+
+- No embedding model integration. The library stops at
+  the input boundary.
+- No vector storage or similarity search. The product
+  chooses the vector store.
+- No batched embedding API. Batched wrapping is a
+  trivial utility; defer to v1.0.0-alpha.2 if needed.
+- No CLI subcommand. Primitives are library-only.
+- No schema changes. The 23 JSON Schemas stay
+  unchanged.
+
 ## [0.9.0] - 2026-06-06
 
 ### Added

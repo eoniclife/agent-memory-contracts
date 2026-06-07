@@ -140,8 +140,16 @@ from .access import (
     summarize_access,
     team_scope,
 )
+from .embedding import (
+    DEFAULT_MAX_CHARS,
+    EmbeddingInput,
+    embedding_input_from_dict,
+    embedding_input_to_dict,
+    record_to_embedding_input,
+    text_for_record_type,
+)
 
-__version__ = "0.9.0"
+__version__ = "1.0.0a1"
 
 __all__ = [
     # Evidence plane
@@ -250,4 +258,11 @@ __all__ = [
     "team_scope",
     "customer_scope",
     "private_scope",
+    # Embedding input (added in 1.0.0-alpha.1)
+    "DEFAULT_MAX_CHARS",
+    "EmbeddingInput",
+    "record_to_embedding_input",
+    "text_for_record_type",
+    "embedding_input_to_dict",
+    "embedding_input_from_dict",
 ]
