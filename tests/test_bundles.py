@@ -245,7 +245,8 @@ class RealWorldTests(unittest.TestCase):
         })
         base = {
             "id": ledger_id,
-            "schema_version": "1.0.0",
+            "schema_version": "1.1.0",
+            "freshness_score": None,
             "ledger_type": "preference",
             "status": "active",
             "confidence": "high",

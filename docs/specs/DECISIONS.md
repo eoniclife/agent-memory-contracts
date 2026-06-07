@@ -59,6 +59,71 @@ note the decisions you've taken somewhere persistent" (per
   typical results are small and stable iteration order matters
   for product UX.
 
+## Sprint 27 / v1.1.0 — Decay primitives
+
+**Decided:** 2026-06-07
+**Spec:** `docs/specs/sprint_27_decay.md`
+
+### 9 small defaults (all applied)
+
+1. **Default `DecayPolicy(half_life_days=90)`.** Three
+   months is a reasonable default for personal /
+   company-brain use. 30 days is too aggressive; 1 year
+   is too lax.
+2. **Default decay curve: exponential.** Linear decay is
+   too abrupt; exponential is smoother.
+3. **Default event weights: `supersession=0.5`,
+   `new_evidence=0.1`.** A supersession means the
+   record is replaced; new evidence is incremental.
+4. **`freshness_score` is computed at read time.** Not
+   persisted; not cached. The score depends on
+   `as_of` and the current bundle.
+5. **Records without `asserted_at` get freshness 1.0**
+   (defensive default for malformed records).
+6. **`freshness_score` is optional in the schema.** A
+   record with the field set to `None` is treated as
+   "not yet computed"; the compiler falls back to the
+   v1.0.0 logic.
+7. **`compile_context_pack` defaults to no decay.** v1.0.0
+   behavior is preserved by default; users opt in by
+   passing a `DecayPolicy` explicitly.
+8. **Decay is monotonic.** Once at 0.0, stays there until
+   the bundle is changed.
+9. **Decay is per-record, not per-bundle.** Each record
+   gets its own score based on its `asserted_at` and
+   event count.
+
+### 3 bigger defaults
+
+10. **`schema_version` in the JSON Schemas bumps to
+    "1.1.0" for the 6 affected types** (3 ledger
+    entries, taste card, 2 state snapshots). The
+    Python source's `SCHEMA_VERSION` constant
+    remains "1.0.0" but the dataclass `validate()`
+    method accepts either "1.0.0" or "1.1.0". This
+    means the migration is backwards-compatible at
+    the Python layer; the JSON Schemas are stricter
+    (require "1.1.0") so a raw v1.0.0 record must
+    be auto-migrated first.
+
+11. **The migration step is a no-op for the field
+    itself; it only adds the optional key.** Existing
+    records get `freshness_score: null`; the compiler
+    handles the None case. This avoids a one-time
+    cost of computing scores for every record.
+
+12. **Auto-migration is built into the high-level
+    validators and the dataclass `from_dict`
+    methods.** This makes the migration transparent
+    to products that don't need to deal with
+    versions. The downside: a user who calls
+    `jsonschema_validator.validate_instance` directly
+    on a v1.0.0 record will see it fail; they should
+    use the high-level validators or call
+    `migrate_bundle` first. Documented in the spec.
+
+---
+
 ## Sprint 26 / v1.0.2 — MCP server
 
 **Decided:** 2026-06-07

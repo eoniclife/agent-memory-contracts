@@ -99,6 +99,28 @@ def _build_record(cls: type[T], data: dict[str, Any]) -> T:
         raise ValueError(f"invalid {cls.__name__}: {exc}") from exc
 
 
+def _auto_migrate_taste_cards(cards: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Auto-migrate taste cards to v1.1.0 (adds freshness_score)."""
+    out: list[dict[str, Any]] = []
+    for card in cards:
+        out.append(_migrate_taste_card_dict(card))
+    return out
+
+
+def _migrate_taste_card_dict(card: dict[str, Any]) -> dict[str, Any]:
+    """Migrate a single taste-card dict to v1.1.0."""
+    version = card.get("schema_version")
+    if version == "1.1.0":
+        return card
+    if version == "1.0.0":
+        new_card = dict(card)
+        new_card["schema_version"] = "1.1.0"
+        if "freshness_score" not in new_card:
+            new_card["freshness_score"] = None
+        return new_card
+    return card
+
+
 def _assert_no_boundary_fields(record: dict[str, Any]) -> None:
     forbidden_fields = CANDIDATE_ONLY_FIELDS | LEDGER_ONLY_FIELDS | TRUSTED_MEMORY_REFERENCE_FIELDS
     forbidden = sorted(forbidden_fields.intersection(record.keys()))
@@ -138,7 +160,7 @@ class TasteReducerDecision:
         return record
 
     def validate(self) -> None:
-        _require(self.schema_version == SCHEMA_VERSION, "schema_version must be 1.0.0")
+        _require(self.schema_version in ("1.0.0", "1.1.0"), "schema_version must be 1.0.0 or 1.1.0")
         _require(self.decision_type in DECISION_TYPES, "invalid decision_type")
         _string_list("target_taste_signal_ids", self.target_taste_signal_ids, "cand_taste_")
         _string_list("target_taste_card_ids", self.target_taste_card_ids, "taste_")
@@ -212,10 +234,12 @@ class TasteCard:
     supersedes: list[str]
     superseded_by: list[str]
     metadata: dict[str, Any] = field(default_factory=dict)
+    freshness_score: float | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "TasteCard":
         _assert_no_boundary_fields(data)
+        data = _migrate_taste_card_dict(data)
         record = _build_record(cls, data)
         record.validate()
         return record
@@ -236,7 +260,7 @@ class TasteCard:
         return make_taste_card_id(self.evidence_span_ids, self.semantic_payload())
 
     def validate(self) -> None:
-        _require(self.schema_version == SCHEMA_VERSION, "schema_version must be 1.0.0")
+        _require(self.schema_version in ("1.0.0", "1.1.0"), "schema_version must be 1.0.0 or 1.1.0")
         _require(self.card_type == "taste_card", "card_type must be taste_card")
         _require(self.status in TASTE_STATUSES, "invalid status")
         _require(isinstance(self.subject, str) and self.subject, "subject is required")
@@ -354,6 +378,10 @@ def validate_taste_bundle(
     taste_reducer_decisions: Iterable[dict[str, Any]],
     taste_cards: Iterable[dict[str, Any]],
 ) -> None:
+    # Auto-migrate taste cards to v1.1.0 (adds freshness_score).
+    taste_cards = list(taste_cards)
+    taste_cards = _auto_migrate_taste_cards(taste_cards)
+
     source_ids = {record["id"] for record in source_records}
     episode_ids = {record["id"] for record in episode_records}
     spans_by_id = {record["id"]: record for record in evidence_spans}

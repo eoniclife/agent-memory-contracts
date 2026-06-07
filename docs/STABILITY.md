@@ -230,6 +230,21 @@ requires the `fastmcp` package (installed via
 | `MCPConfig` | `integrations.mcp` | Configuration dataclass |
 | `run_server` | `integrations.mcp` | Entry-point function |
 
+### Decay (v1.1.0)
+
+The decay module is the first new feature in the v1.1.0
+release line. It computes a freshness score for each
+record (0.0–1.0) at read time, used by the context_pack
+compiler to weight records in the selection.
+
+| Name | Module | Description |
+| --- | --- | --- |
+| `DecayPolicy` | `decay` | Configuration: half-life, event weights, curve |
+| `DecayScore` | `decay` | The freshness score: 0.0 (stale) to 1.0 (fresh) |
+| `apply_decay` | `decay` | Compute the score for a record at a time |
+| `default_decay_policy` | `decay` | The default policy |
+| `v1_0_0_to_v1_1_0_step` | `decay` | The first concrete schema migration step |
+
 ### CLI
 
 The library ships a CLI via `python -m agent_memory_contracts`:

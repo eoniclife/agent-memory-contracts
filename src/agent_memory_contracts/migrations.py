@@ -351,15 +351,23 @@ class SchemaMigrator:
 
 
 def default_migrator() -> SchemaMigrator:
-    """Return a fresh ``SchemaMigrator`` with no built-in
-    migrations registered.
+    """Return a fresh ``SchemaMigrator`` with the built-in
+    v1.0.0 -> v1.1.0 migration registered.
 
-    The library's schemas are at ``1.0.0`` and have been
-    stable; the framework ships with no concrete
-    migrations. A future v1.1.0 sprint will register the
-    first one as part of the schema bump.
+    The library's schemas are at ``1.1.0`` as of v1.1.0;
+    the v1.0.0 -> v1.1.0 step is the first concrete
+    migration. It adds an optional ``freshness_score``
+    field to ledger entries, taste cards, and state
+    snapshots; bumps ``schema_version``; the field is
+    computed on read by the decay module.
     """
-    return SchemaMigrator()
+    # Lazy import to avoid a circular dependency between
+    # migrations and decay at module load time.
+    from agent_memory_contracts.decay import v1_0_0_to_v1_1_0_step
+
+    migrator = SchemaMigrator()
+    migrator.register(v1_0_0_to_v1_1_0_step())
+    return migrator
 
 
 def apply_migrations(

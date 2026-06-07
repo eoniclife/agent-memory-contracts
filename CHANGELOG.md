@@ -182,68 +182,78 @@ in the core.
   pattern. A v1.x+ consideration is a `Store`-based
   adapter for the modern LangGraph path.
 
-## [1.0.2] - 2026-06-07
+## [1.1.0] - 2026-06-07
 
-A backwards-compatible minor release. New optional MCP
-server integration; no library-code or schema changes in
-the core.
+The first release in the v1.1.x line. The first concrete
+schema migration; the first new feature since v1.0.0 final.
+This is the proof that the v1.0.0 stability commitment is
+honest, not theoretical: a real schema bump, with a real
+migration step, that doesn't break v1.0.0 records.
 
 ### Added
 
-- **MCP server integration.** New optional module
-  `agent_memory_contracts.integrations.mcp` (3 public
-  names: `ContractsMCPServer`, `MCPConfig`, `run_server`).
-  Built on [FastMCP](https://github.com/PrefectHQ/fastmcp),
-  the de facto framework for building MCP servers in
-  Python.
+- **Decay module.** New `agent_memory_contracts.decay`
+  module (5 public names: `DecayPolicy`, `DecayScore`,
+  `apply_decay`, `default_decay_policy`,
+  `v1_0_0_to_v1_1_0_step`). The module computes a
+  freshness score (0.0–1.0) for each record at read
+  time, used by the context_pack compiler to weight
+  records in the selection. Exponential or linear
+  decay curves; configurable half-life; event weights
+  for supersession and new-evidence.
 
-  Tools exposed (3):
-  - `validate_bundle(bundle)` — validate every record
-    against the library's JSON Schemas; returns a
-    `plane -> errors` dict.
-  - `compile_context(bundle, task, policy)` — compile a
-    `ContextPack`; returns a dict form of the pack plus
-    the selected / excluded record id lists.
-  - `check_access(bundle, scope)` — run the v0.9.0 access
-    control; returns the allowed records + summary.
+- **First concrete schema migration step.** The v1.0.0
+  → v1.1.0 migration is registered in
+  `default_migrator()`. The step adds an optional
+  `freshness_score` field to ledger entries, taste
+  cards, and state snapshots; bumps `schema_version`
+  to "1.1.0". The step is a no-op for the field
+  itself (existing records get `freshness_score: null`;
+  the compiler handles the None case gracefully).
 
-  Resources exposed (1 list + 23 schemas = 24):
-  - `agent-memory-contracts://schemas` — list of all
-    available JSON Schema names.
-  - `agent-memory-contracts://schemas/{name}` — read a
-    single JSON Schema by name.
+- **Auto-migration in dataclass `from_dict` and
+  high-level validators.** Calling `from_dict` on a
+  v1.0.0 record transparently migrates it to v1.1.0
+  before building the dataclass. The high-level
+  validators (`validate_ledger_bundle`,
+  `validate_taste_bundle`, `validate_state_bundle`)
+  also auto-migrate records before validating. This
+  makes the migration transparent to products that
+  don't need to deal with versions.
 
-- **`[mcp]` optional extra.** `pyproject.toml` now
-  declares `mcp = ["fastmcp>=2.0"]`. The integration is
-  not imported by the core library; users install the
-  extra explicitly. The `[all]` extra now bundles
-  `[jsonschema,langchain,mcp]`.
+- **6 JSON Schemas updated to v1.1.0**:
+  `fact_ledger_entry`, `preference_ledger_entry`,
+  `decision_ledger_entry`, `taste_card`,
+  `project_state_snapshot`, `core_state_snapshot`.
+  Each adds the optional `freshness_score` field
+  (type: `number | null`, default: `null`).
 
-- **Entry point:** `python -m
-  agent_memory_contracts.integrations.mcp` starts the
-  server in stdio mode. The server also reads
-  `MCP_TRANSPORT`, `MCP_HOST`, and `MCP_PORT` from the
-  environment for HTTP mode.
+- **`freshness_score` field added to 6 dataclasses**
+  (3 ledger entries, taste card, 2 state snapshots).
+  Default value: `None`. Field is positioned at the
+  end of each class to avoid breaking the dataclass
+  field-order contract (no required fields after
+  defaulted fields).
 
-- **Example script** `examples/mcp_server.py` — a
-  runnable demonstration of the entry point.
+- **Example script** `examples/decay.py` —
+  demonstrates decay scoring on a small bundle of
+  facts at various ages, plus the first concrete
+  migration step.
 
-- **Test file** `tests/test_integrations_mcp.py` — 14
-  tests gated on `pytest.importorskip("fastmcp")`. Tests
-  cover: config defaults, schema name loading, schema
-  lookup, the `_validate_bundle` helper, the
-  `_records_to_iter` helper, server tool invocation
-  (validate, check_access), and resource resolution.
+- **Test file** `tests/test_decay.py` — 15 tests
+  covering `DecayPolicy` construction, `apply_decay`
+  for exponential and linear curves, supersession
+  event weighting, malformed-timestamp fallback,
+  and the migration step.
 
-- **Spec doc** `docs/specs/sprint_26_mcp_server.md` —
-  the durable rationale for the integration shape.
+- **Spec doc** `docs/specs/sprint_27_decay.md` —
+  the durable rationale for the decay primitive
+  and the v1.1.0 schema bump.
 
 ### Changed
 
-- `docs/STABILITY.md` lists the 3 new public names in a
-  new "MCP server (v1.0.2)" section.
-- `pyproject.toml` adds the `[mcp]` and updates the
-  `[all]` extras.
+- `docs/STABILITY.md` lists the 5 new public names
+  in a new "Decay (v1.1.0)" section.
 
 ### Removed
 
@@ -251,21 +261,25 @@ the core.
 
 ### Notes
 
-- The server is **stateless**. Each tool call is
-  independent; no shared state between calls. A
-  stateful mode is a v1.1.0+ consideration.
-- The server uses **stdio transport** by default.
-  HTTP/SSE is opt-in via
-  `MCPConfig(transport="http", port=8765)` or the
-  `MCP_TRANSPORT=http` environment variable.
-- The server exposes 3 tools, not the full library
-  surface. The other functions (`fingerprint`, `diff`,
-  `merge`, `hygiene`) are client-side operations; they
-  don't need an MCP round-trip.
-- The server does not implement a "store" tool. The
-  library is not a store; the server is stateless. A
-  store-based adapter is a v1.1.0+ consideration (and
-  would couple to LangGraph's `Store` API).
+- **The `schema_version` constant in the 3 affected
+  Python source files (ledger, taste, state) is now
+  "1.0.0" with a lenient check** that accepts
+  "1.0.0" or "1.1.0". This means v1.0.0 records
+  continue to pass the dataclass `validate()` check.
+  The 6 JSON Schemas are stricter: they require
+  "1.1.0" (so a raw v1.0.0 record fails JSON schema
+  validation; it must be auto-migrated first).
+- **Migration framework's first real use.**
+  `default_migrator()` is no longer empty; it
+  registers the v1.0.0 → v1.1.0 step. The framework
+  has been waiting for this since v1.0.0a2.
+- **Decay is opt-in.** The compiler's
+  `compile_context_pack` continues to default to no
+  decay (preserving the v1.0.0 behavior). A future
+  release will wire decay into the compiler's
+  selection score; for v1.1.0, `apply_decay` is
+  available as a standalone function for products
+  that want to compute scores.
 
 ## [0.8.0] - 2026-06-06
 

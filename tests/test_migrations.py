@@ -358,11 +358,16 @@ class TestDataclassInput(unittest.TestCase):
 
 
 class TestDefaultMigrator(unittest.TestCase):
-    """default_migrator returns an empty registry."""
+    """default_migrator returns a registry with the
+    v1.0.0 -> v1.1.0 step registered (the only concrete
+    migration in v1.1.0)."""
 
-    def test_empty_registry(self) -> None:
+    def test_has_v1_1_step(self) -> None:
         m = default_migrator()
-        self.assertEqual(m.registered_steps(), ())
+        steps = m.registered_steps()
+        self.assertEqual(len(steps), 1)
+        self.assertEqual(steps[0].from_version, "1.0.0")
+        self.assertEqual(steps[0].to_version, "1.1.0")
 
     def test_migrate_via_default_no_path_raises(self) -> None:
         bundle = [_build_source_dict("1.0.0")]

@@ -6,9 +6,9 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Iterable, TypeVar, cast
 
-from .ledger_contracts import ledger_entry_from_dict
+from .ledger_contracts import _auto_migrate_ledger_entries, ledger_entry_from_dict
 from .state_ids import make_core_state_id, make_project_state_id, make_state_reducer_decision_id
-from .taste_contracts import taste_card_from_dict
+from .taste_contracts import _auto_migrate_taste_cards, taste_card_from_dict
 
 T = TypeVar("T")
 
@@ -90,6 +90,28 @@ def _build_record(cls: type[T], data: dict[str, Any]) -> T:
         raise ValueError(f"invalid {cls.__name__}: {exc}") from exc
 
 
+def _auto_migrate_state_snapshots(states: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Auto-migrate state snapshots to v1.1.0 (adds freshness_score)."""
+    out: list[dict[str, Any]] = []
+    for state in states:
+        out.append(_migrate_state_snapshot_dict(state))
+    return out
+
+
+def _migrate_state_snapshot_dict(state: dict[str, Any]) -> dict[str, Any]:
+    """Migrate a single state-snapshot dict to v1.1.0."""
+    version = state.get("schema_version")
+    if version == "1.1.0":
+        return state
+    if version == "1.0.0":
+        new_state = dict(state)
+        new_state["schema_version"] = "1.1.0"
+        if "freshness_score" not in new_state:
+            new_state["freshness_score"] = None
+        return new_state
+    return state
+
+
 def _assert_no_forbidden_fields(record: dict[str, Any]) -> None:
     found = sorted(FORBIDDEN_FIELDS.intersection(record.keys()))
     _require(not found, f"state record contains forbidden fields: {found}")
@@ -132,7 +154,7 @@ class StateReducerDecision:
         return record
 
     def validate(self) -> None:
-        _require(self.schema_version == SCHEMA_VERSION, "schema_version must be 1.0.0")
+        _require(self.schema_version in ("1.0.0", "1.1.0"), "schema_version must be 1.0.0 or 1.1.0")
         _require(self.decision_type in DECISION_TYPES, "invalid decision_type")
         _string_list("target_project_state_ids", self.target_project_state_ids, "projstate_")
         _string_list("target_core_state_ids", self.target_core_state_ids, "corestate_")
@@ -206,9 +228,10 @@ class StateSnapshotBase:
     supersedes: list[str]
     superseded_by: list[str]
     metadata: dict[str, Any] = field(default_factory=dict)
+    freshness_score: float | None = None
 
     def validate_base(self) -> None:
-        _require(self.schema_version == SCHEMA_VERSION, "schema_version must be 1.0.0")
+        _require(self.schema_version in ("1.0.0", "1.1.0"), "schema_version must be 1.0.0 or 1.1.0")
         _require(self.status in STATE_STATUSES, "invalid status")
         _require(_is_iso8601(self.as_of), "as_of must be ISO-8601")
         _require(isinstance(self.summary, str) and self.summary, "summary is required")
@@ -255,6 +278,7 @@ class ProjectStateSnapshot(StateSnapshotBase):
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "ProjectStateSnapshot":
         _assert_no_forbidden_fields(data)
+        data = _migrate_state_snapshot_dict(data)
         record = _build_record(cls, data)
         record.validate()
         return record
@@ -308,6 +332,7 @@ class CoreStateSnapshot(StateSnapshotBase):
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "CoreStateSnapshot":
         _assert_no_forbidden_fields(data)
+        data = _migrate_state_snapshot_dict(data)
         record = _build_record(cls, data)
         record.validate()
         return record
@@ -546,6 +571,15 @@ def validate_state_bundle(
     project_states: Iterable[dict[str, Any]],
     core_states: Iterable[dict[str, Any]],
 ) -> None:
+    # Auto-migrate ledger entries, taste cards, and state
+    # snapshots to v1.1.0.
+    ledger_entries = _auto_migrate_ledger_entries(list(ledger_entries))
+    taste_cards = _auto_migrate_taste_cards(list(taste_cards))
+    project_states = list(project_states)
+    core_states = list(core_states)
+    project_states = _auto_migrate_state_snapshots(project_states)
+    core_states = _auto_migrate_state_snapshots(core_states)
+
     source_ids = {record["id"] for record in source_records}
     episode_ids = {record["id"] for record in episode_records}
     spans_by_id = {record["id"]: record for record in evidence_spans}

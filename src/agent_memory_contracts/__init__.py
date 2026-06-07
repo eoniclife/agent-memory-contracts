@@ -148,6 +148,13 @@ from .embedding import (
     record_to_embedding_input,
     text_for_record_type,
 )
+from .decay import (
+    DecayPolicy,
+    DecayScore,
+    apply_decay,
+    default_decay_policy,
+    v1_0_0_to_v1_1_0_step,
+)
 from .migrations import (
     CURRENT_SCHEMA_VERSION,
     MigrationResult,
@@ -164,7 +171,7 @@ from .compilation import (
     compile_context_pack,
 )
 
-__version__ = "1.0.2"
+__version__ = "1.1.0"
 
 __all__ = [
     # Evidence plane
@@ -293,4 +300,10 @@ __all__ = [
     "CompilationPolicy",
     "CompilationResult",
     "compile_context_pack",
+    # Decay (added in 1.1.0)
+    "DecayPolicy",
+    "DecayScore",
+    "apply_decay",
+    "default_decay_policy",
+    "v1_0_0_to_v1_1_0_step",
 ]

@@ -39,104 +39,302 @@
     "metadata"
   ],
   "properties": {
-    "id": { "type": "string", "pattern": "^taste_[0-9a-f]{24,}$" },
-    "schema_version": { "const": "1.0.0" },
-    "card_type": { "const": "taste_card" },
-    "status": { "enum": ["active", "stale", "superseded", "retracted", "contested", "archived"] },
-    "subject": { "type": "string", "minLength": 1 },
-    "domain": { "enum": ["writing", "product", "investing", "architecture", "design", "communication", "operations", "personal", "other"] },
-    "scope": { "enum": ["global", "project", "context_specific"] },
+    "id": {
+      "type": "string",
+      "pattern": "^taste_[0-9a-f]{24,}$"
+    },
+    "schema_version": {
+      "const": "1.1.0"
+    },
+    "card_type": {
+      "const": "taste_card"
+    },
+    "status": {
+      "enum": [
+        "active",
+        "stale",
+        "superseded",
+        "retracted",
+        "contested",
+        "archived"
+      ]
+    },
+    "subject": {
+      "type": "string",
+      "minLength": 1
+    },
+    "domain": {
+      "enum": [
+        "writing",
+        "product",
+        "investing",
+        "architecture",
+        "design",
+        "communication",
+        "operations",
+        "personal",
+        "other"
+      ]
+    },
+    "scope": {
+      "enum": [
+        "global",
+        "project",
+        "context_specific"
+      ]
+    },
     "project_refs": {
       "type": "array",
-      "items": { "type": "string" }
+      "items": {
+        "type": "string"
+      }
     },
-    "principle": { "type": "string", "minLength": 1 },
-    "rationale": { "type": "string", "minLength": 1 },
-    "strength": { "enum": ["weak", "medium", "strong", "hard_constraint"] },
-    "confidence": { "enum": ["low", "medium", "high"] },
-    "taste_kind": { "enum": ["preference", "aversion", "principle", "objection_pattern", "positive_example", "negative_example", "contrast_pair"] },
+    "principle": {
+      "type": "string",
+      "minLength": 1
+    },
+    "rationale": {
+      "type": "string",
+      "minLength": 1
+    },
+    "strength": {
+      "enum": [
+        "weak",
+        "medium",
+        "strong",
+        "hard_constraint"
+      ]
+    },
+    "confidence": {
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ]
+    },
+    "taste_kind": {
+      "enum": [
+        "preference",
+        "aversion",
+        "principle",
+        "objection_pattern",
+        "positive_example",
+        "negative_example",
+        "contrast_pair"
+      ]
+    },
     "source_record_ids": {
       "type": "array",
-      "items": { "type": "string", "pattern": "^src_" }
+      "items": {
+        "type": "string",
+        "pattern": "^src_"
+      }
     },
     "episode_record_ids": {
       "type": "array",
-      "items": { "type": "string", "pattern": "^ep_" }
+      "items": {
+        "type": "string",
+        "pattern": "^ep_"
+      }
     },
     "evidence_span_ids": {
       "type": "array",
       "minItems": 1,
-      "items": { "type": "string", "pattern": "^span_" }
+      "items": {
+        "type": "string",
+        "pattern": "^span_"
+      }
     },
     "candidate_taste_signal_ids": {
       "type": "array",
-      "items": { "type": "string", "pattern": "^cand_taste_" }
+      "items": {
+        "type": "string",
+        "pattern": "^cand_taste_"
+      }
     },
     "positive_example_span_ids": {
       "type": "array",
-      "items": { "type": "string", "pattern": "^span_" }
+      "items": {
+        "type": "string",
+        "pattern": "^span_"
+      }
     },
     "negative_example_span_ids": {
       "type": "array",
-      "items": { "type": "string", "pattern": "^span_" }
+      "items": {
+        "type": "string",
+        "pattern": "^span_"
+      }
     },
     "contrast_pairs": {
       "type": "array",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["preferred_span_id", "rejected_span_id", "reason"],
+        "required": [
+          "preferred_span_id",
+          "rejected_span_id",
+          "reason"
+        ],
         "properties": {
-          "preferred_span_id": { "type": "string", "pattern": "^span_" },
-          "rejected_span_id": { "type": "string", "pattern": "^span_" },
-          "reason": { "type": "string", "minLength": 1 }
+          "preferred_span_id": {
+            "type": "string",
+            "pattern": "^span_"
+          },
+          "rejected_span_id": {
+            "type": "string",
+            "pattern": "^span_"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       }
     },
     "objection_patterns": {
       "type": "array",
-      "items": { "type": "string" }
+      "items": {
+        "type": "string"
+      }
     },
     "application_notes": {
       "type": "array",
-      "items": { "type": "string" }
+      "items": {
+        "type": "string"
+      }
     },
-    "reducer_decision_id": { "type": "string", "pattern": "^redtaste_" },
-    "observed_at": { "type": ["string", "null"], "format": "date-time" },
-    "asserted_at": { "type": ["string", "null"], "format": "date-time" },
-    "valid_from": { "type": ["string", "null"], "format": "date-time" },
-    "valid_until": { "type": ["string", "null"], "format": "date-time" },
-    "stale_after": { "type": ["string", "null"], "format": "date-time" },
-    "created_at": { "type": "string", "format": "date-time" },
-    "updated_at": { "type": "string", "format": "date-time" },
+    "reducer_decision_id": {
+      "type": "string",
+      "pattern": "^redtaste_"
+    },
+    "observed_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "asserted_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "valid_from": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "valid_until": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "stale_after": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
     "supersedes": {
       "type": "array",
-      "items": { "type": "string", "pattern": "^taste_" }
+      "items": {
+        "type": "string",
+        "pattern": "^taste_"
+      }
     },
     "superseded_by": {
       "type": "array",
-      "items": { "type": "string", "pattern": "^taste_" }
+      "items": {
+        "type": "string",
+        "pattern": "^taste_"
+      }
     },
-    "metadata": { "type": "object" }
+    "metadata": {
+      "type": "object"
+    },
+    "freshness_score": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "default": null
+    }
   },
   "anyOf": [
-    { "properties": { "positive_example_span_ids": { "minItems": 1 } } },
-    { "properties": { "negative_example_span_ids": { "minItems": 1 } } },
-    { "properties": { "contrast_pairs": { "minItems": 1 } } }
-  ],
-  "allOf": [
     {
-      "if": { "properties": { "status": { "const": "superseded" } } },
-      "then": {
-        "properties": {
-          "superseded_by": { "minItems": 1 },
-          "valid_until": { "type": "string", "format": "date-time" }
+      "properties": {
+        "positive_example_span_ids": {
+          "minItems": 1
         }
       }
     },
     {
-      "if": { "properties": { "status": { "const": "active" } } },
-      "then": { "properties": { "superseded_by": { "maxItems": 0 } } }
+      "properties": {
+        "negative_example_span_ids": {
+          "minItems": 1
+        }
+      }
+    },
+    {
+      "properties": {
+        "contrast_pairs": {
+          "minItems": 1
+        }
+      }
+    }
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "superseded"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "superseded_by": {
+            "minItems": 1
+          },
+          "valid_until": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "active"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "superseded_by": {
+            "maxItems": 0
+          }
+        }
+      }
     }
   ]
 }

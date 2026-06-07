@@ -87,6 +87,40 @@ def _build_record(cls: type[T], data: dict[str, Any]) -> T:
         raise ValueError(f"invalid {cls.__name__}: {exc}") from exc
 
 
+def _auto_migrate_ledger_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Auto-migrate ledger entries to the current schema version.
+
+    For v1.0.0 entries, adds the optional ``freshness_score``
+    field (default ``None``) and bumps ``schema_version``
+    to "1.1.0". Records already at "1.1.0" are passed
+    through unchanged.
+    """
+    out: list[dict[str, Any]] = []
+    for entry in entries:
+        out.append(_migrate_ledger_entry_dict(entry))
+    return out
+
+
+def _migrate_ledger_entry_dict(entry: dict[str, Any]) -> dict[str, Any]:
+    """Migrate a single ledger-entry dict to v1.1.0.
+
+    v1.0.0 records get the optional ``freshness_score``
+    field added (default ``None``) and ``schema_version``
+    bumped. Other versions are passed through unchanged
+    (validation will fail for unknown versions).
+    """
+    version = entry.get("schema_version")
+    if version == "1.1.0":
+        return entry
+    if version == "1.0.0":
+        new_entry = dict(entry)
+        new_entry["schema_version"] = "1.1.0"
+        if "freshness_score" not in new_entry:
+            new_entry["freshness_score"] = None
+        return new_entry
+    return entry
+
+
 def _assert_no_candidate_only_fields(record: dict[str, Any]) -> None:
     found = sorted(CANDIDATE_ONLY_FIELDS.intersection(record.keys()))
     _require(not found, f"ledger record contains candidate-only fields: {found}")
@@ -124,7 +158,7 @@ class MemoryReducerDecision:
         return record
 
     def validate(self) -> None:
-        _require(self.schema_version == SCHEMA_VERSION, "schema_version must be 1.0.0")
+        _require(self.schema_version in ("1.0.0", "1.1.0"), "schema_version must be 1.0.0 or 1.1.0")
         _require(self.decision_type in DECISION_TYPES, "invalid decision_type")
         _string_list("target_candidate_ids", self.target_candidate_ids, "cand_")
         _string_list("target_ledger_entry_ids", self.target_ledger_entry_ids, LEDGER_PREFIXES)
@@ -181,9 +215,10 @@ class LedgerEntryBase:
     supersedes: list[str]
     superseded_by: list[str]
     metadata: dict[str, Any] = field(default_factory=dict)
+    freshness_score: float | None = None
 
     def validate_base(self) -> None:
-        _require(self.schema_version == SCHEMA_VERSION, "schema_version must be 1.0.0")
+        _require(self.schema_version in ("1.0.0", "1.1.0"), "schema_version must be 1.0.0 or 1.1.0")
         _require(self.ledger_type in LEDGER_TYPES, "invalid ledger_type")
         _require(self.status in LEDGER_STATUSES, "invalid status")
         _require(self.confidence in CONFIDENCE, "invalid confidence")
@@ -230,6 +265,7 @@ class FactLedgerEntry(LedgerEntryBase):
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "FactLedgerEntry":
         _assert_no_candidate_only_fields(data)
+        data = _migrate_ledger_entry_dict(data)
         record = _build_record(cls, data)
         record.validate()
         return record
@@ -262,6 +298,7 @@ class PreferenceLedgerEntry(LedgerEntryBase):
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "PreferenceLedgerEntry":
         _assert_no_candidate_only_fields(data)
+        data = _migrate_ledger_entry_dict(data)
         record = _build_record(cls, data)
         record.validate()
         return record
@@ -298,6 +335,7 @@ class DecisionLedgerEntry(LedgerEntryBase):
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "DecisionLedgerEntry":
         _assert_no_candidate_only_fields(data)
+        data = _migrate_ledger_entry_dict(data)
         record = _build_record(cls, data)
         record.validate()
         return record
@@ -391,6 +429,13 @@ def validate_ledger_bundle(
     reducer_decisions: Iterable[dict[str, Any]],
     ledger_entries: Iterable[dict[str, Any]],
 ) -> None:
+    # Auto-migrate ledger entries to the current schema
+    # version. The migration is opt-out: a v1.0.0 record
+    # gets a `freshness_score: null` field added and its
+    # `schema_version` bumped to "1.1.0".
+    ledger_entries = list(ledger_entries)
+    ledger_entries = _auto_migrate_ledger_entries(ledger_entries)
+
     source_ids = {record["id"] for record in source_records}
     episode_ids = {record["id"] for record in episode_records}
     spans_by_id = {record["id"]: record for record in evidence_spans}
