@@ -124,6 +124,107 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - No graph analytics (PageRank, centrality, clustering).
 - No cycle handling. DAG is structural; cycles raise.
 
+## [1.0.0-alpha.3] - 2026-06-07
+
+### Added
+
+- New module `agent_memory_contracts.compilation` with
+  the ContextPack compiler:
+  - `ContextPackTask` (frozen dataclass) — the task
+    description the compiler is producing a pack for.
+    Mirrors the seven required keys of the
+    `ContextPack.task` field.
+  - `CompilationPolicy` (frozen dataclass) — the
+    compiler's configuration. `max_records=50`,
+    `require_source_coverage=True`,
+    `selection_strategy="recent"`, `exclude_stale=True`,
+    `exclude_retracted=True`, `exclude_contested=False`
+    by default. Builder/validator agent strings.
+  - `CompilationResult` (frozen dataclass) — the
+    output. `context_pack`, `build_receipt`,
+    `validation_report`, `selected_record_ids`,
+    `excluded_record_ids`, `selection_score_by_id`.
+  - `compile_context_pack(bundle, *, task, scope=None,
+    policy=None)` — the headline function. Filters
+    the bundle by scope, schema-validates each
+    record, applies the status filter, enforces
+    source coverage (when `require_source_coverage=True`),
+    scores and selects the top N records, and
+    produces a `ContextPack` with a `BuildReceipt`
+    and `ValidationReport`.
+
+### Behavioral notes
+
+- **Source coverage is enforced by default.** Every
+  claim in the pack is required to have a path to a
+  `SourceRecord` (or `EpisodeRecord`) in the
+  citation graph. Claims without a path are
+  excluded with reason `"no_source_backing"`. The
+  product can disable with
+  `require_source_coverage=False` (the compiler
+  synthesizes a placeholder primary evidence span
+  in that case).
+- **State is required.** The `ContextPack` schema
+  requires at least one `core_state_id` or
+  `project_state_ids` reference. The compiler
+  raises `ValueError` if the bundle has no state
+  record. The product is responsible for ensuring
+  the bundle has at least one `CoreStateSnapshot` or
+  `ProjectStateSnapshot`.
+- **Three selection strategies.** `"recent"`
+  (default): sort by timestamp descending.
+  `"diverse"`: pick one record per `record_type`,
+  rotating. `"frequent"`: sort by citation graph
+  in-degree (most-cited first).
+- **Status filter.** `stale` and `retracted` are
+  excluded by default. `contested` is kept by
+  default (useful for "what's the disagreement?"
+  queries). All three flags are configurable.
+- **Deterministic.** Two calls with the same
+  `(bundle, task, scope, policy)` produce the same
+  `CompilationResult`. The `pack_hash_sha256` is
+  the same. The `BuildReceipt.excluded` list is
+  sorted by `(reason, id)`.
+- **Idempotent.** Calling `compile_context_pack`
+  twice on the same inputs produces the same
+  result.
+- **A pure function.** No I/O, no randomness, no
+  global state. Side effects are limited to reading
+  the wall clock for `created_at` / `validated_at`
+  timestamps (which the product can override via
+  a frozen-dataclass policy if determinism is
+  required at the second level).
+
+### Test discipline
+
+- 24 new tests in `tests/test_compilation.py`
+  covering: `ContextPackTask` invariants,
+  `CompilationPolicy` invariants,
+  `CompilationResult` frozen-ness, basic
+  compilation, source-coverage enforcement, status
+  filter, `max_records` cap, scope filtering,
+  empty-bundle raising, no-state-record raising,
+  selection strategies (recent, diverse,
+  frequent), `require_source_coverage=False`
+  path, dataclass input, public API exports.
+- Total: 501 tests passing (was 477 in
+  v1.0.0-alpha.2), 1 expected skip. `mypy --strict`
+  clean on all 27 source files.
+
+### Out of scope for v1.0.0-alpha.3
+
+- No embedding model integration. The compiler
+  produces a `ContextPack`; the product embeds it.
+- No vector storage or similarity search.
+- No retrieval pre-filtering. The product can
+  pre-filter by semantic similarity before calling
+  the compiler; the compiler selects from the
+  filtered set.
+- No CLI subcommand.
+- No schema changes. The 23 JSON Schemas (now 24,
+  including the new `compilation` module's types)
+  stay unchanged.
+
 ## [1.0.0-alpha.2] - 2026-06-07
 
 ### Added

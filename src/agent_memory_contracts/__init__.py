@@ -157,8 +157,14 @@ from .migrations import (
     default_migrator,
     migrate_bundle,
 )
+from .compilation import (
+    CompilationPolicy,
+    CompilationResult,
+    ContextPackTask,
+    compile_context_pack,
+)
 
-__version__ = "1.0.0a2"
+__version__ = "1.0.0a3"
 
 __all__ = [
     # Evidence plane
@@ -282,4 +288,9 @@ __all__ = [
     "apply_migrations",
     "default_migrator",
     "migrate_bundle",
+    # ContextPack compiler (added in 1.0.0-alpha.3)
+    "ContextPackTask",
+    "CompilationPolicy",
+    "CompilationResult",
+    "compile_context_pack",
 ]
