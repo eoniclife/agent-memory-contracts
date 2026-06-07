@@ -59,6 +59,70 @@ note the decisions you've taken somewhere persistent" (per
   typical results are small and stable iteration order matters
   for product UX.
 
+## Sprint 25 / v1.0.1 — LangChain memory backend
+
+**Decided:** 2026-06-07
+**Spec:** `docs/specs/sprint_25_langchain_memory.md`
+
+### 9 small defaults (all applied)
+
+1. **Default privacy class: `internal`.** Most LangChain
+   chains are for internal tooling. `customer` and `private`
+   are opt-in via `ContractsMemoryConfig(privacy_class="private")`.
+2. **Default `max_bundles: 100`.** Soft cap with FIFO
+   eviction; matches the v0.7.0 hygiene cap convention.
+3. **Default `max_records_per_load: 20`.** Most session
+   memory is short; this prevents the LLM prompt from
+   growing unbounded.
+4. **Default `exclude_stale` / `exclude_retracted` /
+   `exclude_contested: True`.** Matches the v0.8.0+
+   compiler defaults.
+5. **`save_context` records an EpisodeRecord, NOT a
+   FactLedgerEntry.** A conversation turn is a sequence of
+   episodes, not a structured fact. The full reducer/ledger
+   pipeline is intentionally not engaged.
+6. **`load_memory_variables` returns a session-shaped
+   context_pack, NOT a compiled ContextPack.** The compiler
+   requires a state record (a long-term ledger shape),
+   which is the wrong fit for a session memory. The
+   integration shapes the bundle directly.
+7. **Source is a single `conversation` SourceRecord per
+   session.** Not one per turn. The session is the unit of
+   memory; the turn is a sub-episode.
+8. **In-memory store only; no file/DB backend.** v1.1.0+
+   consideration. The `MemoryStore` API is shaped to make
+   this a drop-in replacement later.
+9. **No LLM calls in `save_context`.** The integration does
+   not introduce LLM calls. v1.1.0+ consideration is
+   LLM-based extraction (preference detection, etc.).
+
+### 3 bigger defaults
+
+10. **The integration is `langchain-classic`, not
+    `langchain-core`.** `BaseMemory` lives in
+    `langchain_classic.base_memory` in modern LangChain
+    (0.3+). The `[langchain]` extra installs
+    `langchain-classic>=1.0`. We do not depend on the
+    legacy `langchain<0.1` package.
+
+11. **The integration does not implement `BaseChatMemory`.**
+    `BaseChatMemory` adds message-list semantics; the
+    library is ledger-shaped, not chat-shaped. A
+    `BaseChatMemory` adapter would distort the library's
+    API. Out of scope for v1.0.1.
+
+12. **`BaseMemory` is deprecated in modern LangChain (since
+    0.3.3, removal in 2.0.0).** The recommended replacement
+    is `langchain.agents.create_agent` with checkpointing
+    or the `Store` API. The integration is still useful
+    today and works for users on the classic memory
+    pattern. A v1.x+ consideration is a `Store`-based
+    adapter for the modern LangGraph path. We ship the
+    integration anyway because the proof-of-value is
+    strong, and the alternative is to ship nothing.
+
+---
+
 ## Sprint 22 / v0.9.0 — re-pacing decision (2026-06-07)
 
 **Decided:** 2026-06-07

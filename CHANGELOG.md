@@ -90,6 +90,98 @@ will not break existing names. Schema migrations are the only
 backwards-incompatible event, and the `default_migrator()`
 registry is the safety net.
 
+## [1.0.1] - 2026-06-07
+
+A backwards-compatible minor release. New optional integration
+with LangChain's `BaseMemory`; no library-code or schema changes
+in the core.
+
+### Added
+
+- **LangChain memory backend integration.**
+  New optional module
+  `agent_memory_contracts.integrations.langchain` (3 public
+  names: `ContractsMemory`, `ContractsMemoryConfig`,
+  `MemoryStore`). It is a real `BaseMemory` subclass —
+  `ContractsMemory` extends `langchain_classic.base_memory.BaseMemory`
+  and implements the four abstract methods
+  (`memory_variables`, `load_memory_variables`,
+  `save_context`, `clear`).
+
+  Each `save_context` call records the conversation turn as
+  an `EpisodeRecord` with two `EvidenceSpan` records (one for
+  the input, one for the output). Each `load_memory_variables`
+  call returns a session-shaped context_pack (a subset of the
+  full `ContextPack` shape) containing the most-recent N
+  episodes, their evidence, and the conversation source.
+
+  The integration is the proof that the library is composable
+  with the most popular LLM framework. The chain gets
+  memory without writing a custom memory class:
+
+  ```python
+  from agent_memory_contracts.integrations.langchain import ContractsMemory
+  from langchain_classic.chains import ConversationChain
+
+  memory = ContractsMemory(session_id="user-42")
+  chain = ConversationChain(llm=my_llm, memory=memory)
+  chain.run("Hello, what's the capital of France?")  # records the turn
+  chain.run("And Spain?")                            # reads prior turns
+  ```
+
+- **`[langchain]` optional extra.** `pyproject.toml` now
+  declares `langchain = ["langchain-classic>=1.0"]`. The
+  integration is not imported by the core library; users
+  install the extra explicitly. A new `[all]` extra bundles
+  `[jsonschema,langchain]`.
+
+- **Example script** `examples/langchain_memory.py` — a
+  runnable demonstration of the integration with a
+  `FakeListChatModel` (no API key required).
+
+- **Test file** `tests/test_integrations_langchain.py` —
+  19 tests gated on `pytest.importorskip("langchain_classic.base_memory")`.
+  Tests cover: `BaseMemory` subclass shape, save/load
+  round-trip, `max_records_per_load` cap, `clear` semantics,
+  `MemoryStore` (put/get/dedup/eviction/session isolation),
+  config defaults, and a minimal in-memory chain smoke test.
+
+- **Spec doc** `docs/specs/sprint_25_langchain_memory.md` —
+  the durable rationale for the integration shape.
+
+### Changed
+
+- `docs/STABILITY.md` lists the 3 new public names in a new
+  "LangChain integration (v1.0.1)" section.
+- `pyproject.toml` adds the `[langchain]` and `[all]` extras.
+
+### Removed
+
+- None. The 7-day deprecation window has not been used in the
+  v1.0.x line.
+
+### Notes
+
+- The integration is gated on `langchain-classic>=1.0`. The
+  `BaseMemory` API is in `langchain_classic.base_memory` in
+  modern LangChain (0.3+); we do not depend on the legacy
+  `langchain<0.1` package.
+- The integration does **not** use the library's
+  `compile_context_pack`. The compiler requires a state
+  record (a long-term ledger shape), which is the wrong fit
+  for a session memory. The integration shapes the bundle
+  directly: episodes in chronological order, evidence spans
+  grouped by episode, sources listed once. This is honest
+  about what the integration is (a session memory), not
+  what it isn't (a long-term fact ledger).
+- `BaseMemory` is deprecated in modern LangChain (since
+  0.3.3, removal in 2.0.0; the recommended replacement is
+  `langchain.agents.create_agent` with checkpointing or the
+  `Store` API). The integration is still useful today and
+  will continue to work for users on the classic memory
+  pattern. A v1.x+ consideration is a `Store`-based
+  adapter for the modern LangGraph path.
+
 ## [0.8.0] - 2026-06-06
 
 ### Added

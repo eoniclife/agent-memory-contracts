@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agent-memory-contracts"
-version = "1.0.0"
+version = "1.0.1"
 description = "JSON Schemas and Python contracts for AI agent memory integrity: evidence, candidate, ledger, taste, state, and ContextPack planes."
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -45,6 +45,12 @@ dev = [
 ]
 jsonschema = [
     "jsonschema>=4.0",
+]
+langchain = [
+    "langchain-classic>=1.0",
+]
+all = [
+    "agent-memory-contracts[jsonschema,langchain]",
 ]
 
 [project.scripts]

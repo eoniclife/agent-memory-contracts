@@ -695,12 +695,12 @@ class TestPublicApi(unittest.TestCase):
         import agent_memory_contracts as a
         from packaging.version import Version
         v = Version(a.__version__)
-        # v1.0.0 is the first stable release.
+        # v1.0.0+ is the stable line. Allow 1.0.x (no pre-release).
         self.assertEqual(v.major, 1)
         self.assertEqual(v.minor, 0)
-        self.assertEqual(v.micro, 0)
         self.assertFalse(v.is_prerelease)
         self.assertFalse(v.is_devrelease)
+        self.assertGreaterEqual(v.micro, 0)
 
 
 class TestIntegrationWithAccess(unittest.TestCase):

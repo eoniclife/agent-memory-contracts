@@ -204,6 +204,19 @@ audit script `scripts/audit_public_api.py` walks
 | `CompilationResult` | `compilation` | The compiler's output |
 | `compile_context_pack` | `compilation` | The headline compile function |
 
+### LangChain integration (v1.0.1)
+
+The integration lives in the optional
+`agent_memory_contracts.integrations.langchain` module. It
+requires the `langchain-classic` package (installed via
+`pip install agent-memory-contracts[langchain]`).
+
+| Name | Module | Description |
+| --- | --- | --- |
+| `ContractsMemory` | `integrations.langchain` | A `BaseMemory` subclass |
+| `ContractsMemoryConfig` | `integrations.langchain` | Configuration dataclass |
+| `MemoryStore` | `integrations.langchain` | In-memory bundle store |
+
 ### CLI
 
 The library ships a CLI via `python -m agent_memory_contracts`:
