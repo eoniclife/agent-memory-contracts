@@ -59,6 +59,64 @@ note the decisions you've taken somewhere persistent" (per
   typical results are small and stable iteration order matters
   for product UX.
 
+## Sprint 26 / v1.0.2 — MCP server
+
+**Decided:** 2026-06-07
+**Spec:** `docs/specs/sprint_26_mcp_server.md`
+
+### 9 small defaults (all applied)
+
+1. **Server name: `agent-memory-contracts`.** The MCP
+   `Server.name` field; users see this in their client UI.
+2. **Default transport: `stdio`.** The default MCP
+   transport. HTTP/SSE is opt-in via
+   `MCPConfig(transport="http", port=8765)`.
+3. **Tool descriptions are short.** ~1-2 sentences. Long
+   descriptions live in the docstring; the MCP descriptor
+   uses a one-liner.
+4. **Resource URIs use the `agent-memory-contracts://`
+   scheme.** The `://` is the MCP convention for custom
+   resource schemes.
+5. **The server is stateless.** No caching, no per-session
+   state. v1.1.0+ consideration is a stateful mode.
+6. **Tool input validation uses the library's own
+   validators.** The server does not duplicate
+   validation logic; it delegates to the library.
+7. **Tool errors return JSON-RPC error responses.** The
+   server does not silently swallow exceptions.
+8. **The server does not log to stdout by default.**
+   stdout is the JSON-RPC channel; logging goes to
+   stderr.
+9. **Schema resources are read-only.** The server exposes
+   the JSON Schemas as resources but does not allow
+   modification. Schemas are content-addressed in the
+   library; modification is a v1.1.0+ concern.
+
+### 3 bigger defaults
+
+10. **The integration uses `fastmcp`, not the raw MCP
+    SDK.** FastMCP is the de facto framework for building
+    MCP servers in Python; it's by the same team (Prefect)
+    and the official Anthropic SDK uses it under the hood
+    for many examples. Using FastMCP gives a ~250-LOC
+    server instead of a 2000-LOC one.
+
+11. **The server exposes 3 tools, not the full library
+    surface.** 3 tools = `validate_bundle`,
+    `compile_context`, `check_access`. Other functions
+    (fingerprint, diff, merge, hygiene) are client-side
+    operations; they don't need an MCP round-trip. A
+    user with full bundle access can run them locally.
+
+12. **The server does not implement a "store" tool.**
+    MCP has a `Store` resource type for read/write
+    persistent state. The library is not a store; the
+    server is stateless. A store-based adapter is a
+    v1.1.0+ consideration (and would couple to
+    LangGraph's `Store` API).
+
+---
+
 ## Sprint 25 / v1.0.1 — LangChain memory backend
 
 **Decided:** 2026-06-07

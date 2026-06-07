@@ -182,6 +182,91 @@ in the core.
   pattern. A v1.x+ consideration is a `Store`-based
   adapter for the modern LangGraph path.
 
+## [1.0.2] - 2026-06-07
+
+A backwards-compatible minor release. New optional MCP
+server integration; no library-code or schema changes in
+the core.
+
+### Added
+
+- **MCP server integration.** New optional module
+  `agent_memory_contracts.integrations.mcp` (3 public
+  names: `ContractsMCPServer`, `MCPConfig`, `run_server`).
+  Built on [FastMCP](https://github.com/PrefectHQ/fastmcp),
+  the de facto framework for building MCP servers in
+  Python.
+
+  Tools exposed (3):
+  - `validate_bundle(bundle)` — validate every record
+    against the library's JSON Schemas; returns a
+    `plane -> errors` dict.
+  - `compile_context(bundle, task, policy)` — compile a
+    `ContextPack`; returns a dict form of the pack plus
+    the selected / excluded record id lists.
+  - `check_access(bundle, scope)` — run the v0.9.0 access
+    control; returns the allowed records + summary.
+
+  Resources exposed (1 list + 23 schemas = 24):
+  - `agent-memory-contracts://schemas` — list of all
+    available JSON Schema names.
+  - `agent-memory-contracts://schemas/{name}` — read a
+    single JSON Schema by name.
+
+- **`[mcp]` optional extra.** `pyproject.toml` now
+  declares `mcp = ["fastmcp>=2.0"]`. The integration is
+  not imported by the core library; users install the
+  extra explicitly. The `[all]` extra now bundles
+  `[jsonschema,langchain,mcp]`.
+
+- **Entry point:** `python -m
+  agent_memory_contracts.integrations.mcp` starts the
+  server in stdio mode. The server also reads
+  `MCP_TRANSPORT`, `MCP_HOST`, and `MCP_PORT` from the
+  environment for HTTP mode.
+
+- **Example script** `examples/mcp_server.py` — a
+  runnable demonstration of the entry point.
+
+- **Test file** `tests/test_integrations_mcp.py` — 14
+  tests gated on `pytest.importorskip("fastmcp")`. Tests
+  cover: config defaults, schema name loading, schema
+  lookup, the `_validate_bundle` helper, the
+  `_records_to_iter` helper, server tool invocation
+  (validate, check_access), and resource resolution.
+
+- **Spec doc** `docs/specs/sprint_26_mcp_server.md` —
+  the durable rationale for the integration shape.
+
+### Changed
+
+- `docs/STABILITY.md` lists the 3 new public names in a
+  new "MCP server (v1.0.2)" section.
+- `pyproject.toml` adds the `[mcp]` and updates the
+  `[all]` extras.
+
+### Removed
+
+- None.
+
+### Notes
+
+- The server is **stateless**. Each tool call is
+  independent; no shared state between calls. A
+  stateful mode is a v1.1.0+ consideration.
+- The server uses **stdio transport** by default.
+  HTTP/SSE is opt-in via
+  `MCPConfig(transport="http", port=8765)` or the
+  `MCP_TRANSPORT=http` environment variable.
+- The server exposes 3 tools, not the full library
+  surface. The other functions (`fingerprint`, `diff`,
+  `merge`, `hygiene`) are client-side operations; they
+  don't need an MCP round-trip.
+- The server does not implement a "store" tool. The
+  library is not a store; the server is stateless. A
+  store-based adapter is a v1.1.0+ consideration (and
+  would couple to LangGraph's `Store` API).
+
 ## [0.8.0] - 2026-06-06
 
 ### Added

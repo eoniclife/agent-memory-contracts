@@ -217,6 +217,19 @@ requires the `langchain-classic` package (installed via
 | `ContractsMemoryConfig` | `integrations.langchain` | Configuration dataclass |
 | `MemoryStore` | `integrations.langchain` | In-memory bundle store |
 
+### MCP server (v1.0.2)
+
+The MCP server lives in the optional
+`agent_memory_contracts.integrations.mcp` module. It
+requires the `fastmcp` package (installed via
+`pip install agent-memory-contracts[mcp]`).
+
+| Name | Module | Description |
+| --- | --- | --- |
+| `ContractsMCPServer` | `integrations.mcp` | The MCP server class |
+| `MCPConfig` | `integrations.mcp` | Configuration dataclass |
+| `run_server` | `integrations.mcp` | Entry-point function |
+
 ### CLI
 
 The library ships a CLI via `python -m agent_memory_contracts`:
