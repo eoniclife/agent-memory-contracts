@@ -691,13 +691,16 @@ class TestPublicApi(unittest.TestCase):
         ):
             self.assertTrue(hasattr(a, name), f"missing export: {name}")
 
-    def test_version_is_alpha(self) -> None:
+    def test_version_is_stable(self) -> None:
         import agent_memory_contracts as a
         from packaging.version import Version
         v = Version(a.__version__)
-        # Pre-release 1.0.0 versions: a1 is allowed.
+        # v1.0.0 is the first stable release.
         self.assertEqual(v.major, 1)
-        self.assertLess(v, Version("1.0.0"))
+        self.assertEqual(v.minor, 0)
+        self.assertEqual(v.micro, 0)
+        self.assertFalse(v.is_prerelease)
+        self.assertFalse(v.is_devrelease)
 
 
 class TestIntegrationWithAccess(unittest.TestCase):

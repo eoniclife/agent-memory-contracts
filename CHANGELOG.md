@@ -5,16 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-06-06
+## [1.0.0] - 2026-06-07
+
+The first stable release of `agent-memory-contracts`. The public
+API is now frozen; everything in `__all__` is contract. Pre-1.0
+releases (`0.1.0` through `0.9.0` + `1.0.0-alpha.1` through
+`1.0.0-alpha.4`) are kept for traceability but are superseded by
+this release.
 
 ### Added
 
+- **Stability commitment.** New document
+  `docs/STABILITY.md` describes the v1.0.0 stability contract:
+  - The complete public API surface, listed by plane, with
+    one row per name in `__all__`.
+  - SemVer policy: bug-fix releases in `1.0.x`, new features
+    in `1.x.0`, breaking changes in `x.0.0`. Pre-release tags
+    (`a` / `b` / `rc`) reserved for the next major or minor.
+  - CHANGELOG discipline: every release has a
+    "Keep a Changelog" entry with `### Added`, `### Changed`,
+    `### Removed`, `### Fixed` sections. Empty sections
+    omitted.
+  - Schema policy: `SCHEMA_VERSION = "1.0.0"` is the current
+    schema string. Bumping it requires a registered
+    `MigrationStep` in `default_migrator()`, a CHANGELOG
+    entry, and a test in `tests/test_migrations.py`.
+  - Deprecation policy: 3-minor-version sunset. v1.2.0 marks
+    deprecated, v1.3.0 emits `DeprecationWarning`, v1.4.0
+    removes (with `### Removed` section in CHANGELOG).
+  - Audit procedure: `scripts/audit_public_api.py` walks
+    `__all__` and verifies every name is documented in
+    `STABILITY.md`. The audit is wired into CI and is a
+    required check for any release.
+- **Public API audit script** (`scripts/audit_public_api.py`).
+  Reads `src/agent_memory_contracts/__init__.py` `__all__`,
+  parses the `## The Public API Surface` table in
+  `STABILITY.md`, and exits non-zero with the diff if the two
+  diverge. Designed for `pytest`-style CI integration.
 - **PyPI publish pipeline.** Library is now ready to publish to
   PyPI via GitHub Actions using [trusted publishing (OIDC)](https://docs.pypi.org/trusted-publishers/).
   New workflow: `.github/workflows/publish.yml`. Triggers on GitHub
   Release (`types: [published]`) and on manual `workflow_dispatch`
   (with a TestPyPI checkbox for dry-runs). Builds sdist + wheel,
-  verifies `py.typed` marker and 23 schemas are present, and
+  verifies `py.typed` marker and 24 schemas are present, and
   publishes via the OIDC token from the `pypi` environment — no
   long-lived PyPI token to leak.
 - **Console script entry point.** `pip install agent-memory-contracts`
@@ -30,13 +63,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - `pyproject.toml`:
+  - Version: `1.0.0a4` → `1.0.0`.
   - Added `[project.scripts]` entry: `agent-memory-contracts`
     → `agent_memory_contracts.__main__:main`.
   - Added `Changelog` URL to `[project.urls]`.
   - Added explicit `py.typed` to `[tool.setuptools.package-data]`
     (PEP 561; some setuptools versions do not auto-include it).
-- No library-code or schema changes. All 325 existing tests still
-  pass; the build artifact is a 105 KB wheel + 127 KB sdist.
+- `src/agent_memory_contracts/__init__.py`:
+  - `__version__ = "1.0.0"`.
+- No library-code or schema changes from the alpha-4 line. All
+  501 existing tests still pass; `mypy --strict` is clean across
+  all 28 source modules.
+
+### Removed
+
+- None. The 7-day deprecation window has not been used in the
+  v1.0.0 line. `DeprecationWarning` is reserved for the
+  deprecation policy in `STABILITY.md`; no names are currently
+  deprecated.
+
+### Bottom line
+
+The library is **production-ready. Use it.** The public API
+is frozen; subsequent `1.x.0` releases will add new names but
+will not break existing names. Schema migrations are the only
+backwards-incompatible event, and the `default_migrator()`
+registry is the safety net.
 
 ## [0.8.0] - 2026-06-06
 
