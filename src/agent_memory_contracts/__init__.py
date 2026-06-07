@@ -148,8 +148,17 @@ from .embedding import (
     record_to_embedding_input,
     text_for_record_type,
 )
+from .migrations import (
+    CURRENT_SCHEMA_VERSION,
+    MigrationResult,
+    MigrationStep,
+    SchemaMigrator,
+    apply_migrations,
+    default_migrator,
+    migrate_bundle,
+)
 
-__version__ = "1.0.0a1"
+__version__ = "1.0.0a2"
 
 __all__ = [
     # Evidence plane
@@ -265,4 +274,12 @@ __all__ = [
     "text_for_record_type",
     "embedding_input_to_dict",
     "embedding_input_from_dict",
+    # Schema migration (added in 1.0.0-alpha.2)
+    "CURRENT_SCHEMA_VERSION",
+    "MigrationStep",
+    "MigrationResult",
+    "SchemaMigrator",
+    "apply_migrations",
+    "default_migrator",
+    "migrate_bundle",
 ]

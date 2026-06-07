@@ -124,6 +124,104 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - No graph analytics (PageRank, centrality, clustering).
 - No cycle handling. DAG is structural; cycles raise.
 
+## [1.0.0-alpha.2] - 2026-06-07
+
+### Added
+
+- New module `agent_memory_contracts.migrations` with the
+  schema migration framework:
+  - `MigrationStep` (frozen dataclass) — a single
+    migration from one schema version to another.
+    Fields: `from_version`, `to_version`, `description`,
+    `migrate_record` (a `Callable[[dict], dict]`).
+  - `MigrationResult` (frozen dataclass) — the outcome
+    of applying a chain. Fields: `bundle`,
+    `target_version`, `steps_applied` (a tuple of
+    `(from, to)` pairs), `records_migrated`,
+    `records_unchanged`, `errors` (reserved for future
+    per-record-error-collection).
+  - `SchemaMigrator` (mutable registry) — registers
+    `MigrationStep` objects; provides
+    `register` / `registered_steps` / `has_path` /
+    `find_path` (BFS over the registered edges) /
+    `migrate_bundle`.
+  - `apply_migrations(records, steps, *, target_version)`
+    — the lower-level primitive that walks a record
+    through a chain of steps, setting `schema_version`
+    correctly at each step.
+  - `default_migrator()` — returns a fresh
+    `SchemaMigrator` with no built-in migrations. The
+    library's schemas are stable at "1.0.0" as of
+    v1.0.0-alpha.2; v1.1.0 will register the first
+    concrete migration as part of the schema bump.
+  - `migrate_bundle(bundle, *, target_version,
+    migrator=None)` — the top-level convenience
+    function.
+  - `CURRENT_SCHEMA_VERSION` — the constant
+    `"1.0.0"`, exposed for the product to reference.
+
+### Behavioral notes
+
+- **Forward-only.** A bundle at schema_version="1.0.0"
+  can be migrated to "1.1.0"; the reverse raises
+  `ValueError`. The library's stability promise is
+  "forward-migrations ship with the change," not
+  "downgrades are supported."
+- **Idempotent.** Calling `migrate_bundle` twice on
+  the same bundle with the same `target_version` is a
+  no-op the second time. Records already at the
+  target version are passed through unchanged.
+- **Mixed-version bundles supported.** Each record is
+  migrated independently from its current version to
+  the target. The `MigrationResult` reports the
+  per-record counts.
+- **Dataclass input.** Dataclass records are converted
+  to dicts via `dataclasses.asdict` before the
+  migration is applied. The output is a dict; the
+  product can re-hydrate to dataclasses if desired.
+- **Fail-fast.** A migration that raises propagates the
+  exception out of `migrate_bundle`; no partial
+  results. The product is expected to wrap the call
+  in a try/except.
+- **No built-in migrations.** The framework ships
+  empty. The first concrete migration will be
+  registered as part of the v1.1.0 schema bump.
+
+### Test discipline
+
+- 38 new tests in `tests/test_migrations.py` covering:
+  `MigrationStep` invariants, `MigrationResult`
+  frozen-ness, `SchemaMigrator.register` (with
+  double-registration detection), `find_path` BFS
+  (direct, chained, no-path, empty versions),
+  `has_path`, `apply_migrations` (direct chain,
+  records-already-at-target, mixed-version bundle,
+  missing schema_version, unknown version raises,
+  migration raising propagates, empty bundle),
+  `migrate_bundle` top-level integration, dataclass
+  input conversion, `default_migrator()` empty
+  registry, `CURRENT_SCHEMA_VERSION` constant, and
+  public API exports.
+- Total: 477 tests passing (was 439 in
+  v1.0.0-alpha.1), 1 expected skip. `mypy --strict`
+  clean on all 26 source files.
+
+### Out of scope for v1.0.0-alpha.2
+
+- No concrete schema migrations (the schemas are
+  stable). v1.1.0 will add the first one.
+- No auto-detection of source version. The caller
+  passes `target_version`; the framework assumes
+  the bundle is at the version inferred from its
+  records.
+- No validation of migrated records. A migration
+  might produce an invalid record; the framework
+  applies the migration; validation is the product's
+  responsibility.
+- No persistence of migration state. The product
+  persists the migrated bundle.
+- No CLI subcommand. Primitives are library-only.
+
 ## [1.0.0-alpha.1] - 2026-06-07
 
 ### Added
