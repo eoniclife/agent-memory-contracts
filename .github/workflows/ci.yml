@@ -55,6 +55,7 @@ jobs:
           PYTHONPATH=src python -c "
           import json, sys
           from agent_memory_contracts.audit import compute_audit_pack, audit_pack_to_markdown
+          # Complete chain: source -> span -> candidate -> reducer decision -> ledger entry
           bundle = [
               {'id': 'src_demo', 'schema_version': '1.0.0', 'source_type': 'chatgpt',
                'title': 'demo', 'origin_uri': None,
@@ -63,10 +64,22 @@ jobs:
                'author_or_sender': None, 'participants': [],
                'privacy_class': 'internal', 'custody_status': 'parsed',
                'parser_version': 'v1', 'metadata': {}},
+              {'id': 'span_demo', 'schema_version': '1.0.0',
+               'source_record_id': 'src_demo',
+               'start_offset': 0, 'end_offset': 10,
+               'raw_text': 'hello world', 'quote': 'hello world',
+               'location_kind': 'line_range', 'location_value': '1-1',
+               'extracted_at': '2026-06-18T00:00:00Z', 'extractor': 'demo',
+               'confidence': '0.9', 'metadata': {}},
+              {'id': 'cand_demo', 'schema_version': '1.0.0', 'candidate_kind': 'fact',
+               'source_record_ids': ['src_demo'], 'evidence_span_ids': ['span_demo'],
+               'extracted_at': '2026-06-18T00:00:00Z', 'extracted_by': 'demo',
+               'confidence': '0.9', 'rationale': 'demo',
+               'claim': {'text': 'demo'}, 'metadata': {}},
               {'id': 'fact_demo', 'schema_version': '1.1.0', 'ledger_type': 'fact',
                'status': 'active', 'confidence': 'high', 'scope': 'global',
                'source_record_ids': ['src_demo'], 'episode_record_ids': [],
-               'evidence_span_ids': [], 'candidate_ids': [],
+               'evidence_span_ids': ['span_demo'], 'candidate_ids': ['cand_demo'],
                'reducer_decision_id': 'redmem_demo',
                'observed_at': None, 'asserted_at': '2026-06-18T00:00:00Z',
                'valid_from': None, 'valid_until': None, 'stale_after': None,
@@ -77,21 +90,24 @@ jobs:
                'subject': 'demo', 'predicate': 'is', 'object': 'demo',
                'fact_text': 'demo'},
               {'id': 'redmem_demo', 'schema_version': '1.0.0',
-               'decision_type': 'promote', 'target_candidate_ids': [],
+               'decision_type': 'promote', 'target_candidate_ids': ['cand_demo'],
                'target_ledger_entry_ids': ['fact_demo'],
-               'evidence_span_ids': [], 'rationale': 'demo',
+               'evidence_span_ids': ['span_demo'], 'rationale': 'demo',
                'decided_by': {'agent': 'demo', 'model': 'none'},
                'decided_at': '2026-06-18T00:00:00Z', 'confidence': '0.8',
                'risk_class': 'low', 'checks': {}, 'metadata': {}},
           ]
           pack = compute_audit_pack(bundle)
           md = audit_pack_to_markdown(pack)
-          assert pack.bundle_fingerprint
+          assert pack.bundle_fingerprint and len(pack.bundle_fingerprint) == 64
           assert pack.complete_chain_count == 1
+          assert pack.incomplete_chain_count == 0
           assert 'COMPLETE' in md
+          assert 'INCOMPLETE' not in md
           print('audit pack id:', pack.id)
           print('audit pack fingerprint:', pack.bundle_fingerprint)
           print('audit pack COMPLETE chain count:', pack.complete_chain_count)
+          print('OK')
           "
 
       - name: Run runtime smoke
@@ -122,9 +138,12 @@ jobs:
               })
           chain = verify_chain(store)
           cov = verify_coverage(store)
-          print('runtime chain ok:', chain.ok, 'anchors checked:', chain.anchors_checked)
-          print('runtime coverage ok:', cov.ok, 'unanchored:', len(cov.unanchored))
-          print('runtime sources stored:', store.counts()['sources'])
+          assert chain.ok, f'chain failed: {chain}'
+          assert chain.anchors_checked == 2, f'expected 2 anchors, got {chain.anchors_checked}'
+          assert cov.ok, f'coverage failed: {cov}'
+          assert cov.unanchored == (), f'unexpected unanchored: {cov.unanchored}'
+          assert cov.derived_index_drift == (), f'drift: {cov.derived_index_drift}'
+          print('runtime smoke OK; chain anchors=%d, coverage ok=%s' % (chain.anchors_checked, cov.ok))
           "
 
   mypy:
