@@ -47,6 +47,86 @@ jobs:
             PYTHONPATH=src python "$f"
           done
 
+      - name: Run audit CLI smoke
+        run: |
+          # Exercise the audit CLI subcommand with a small
+          # synthesized bundle. Verifies the CLI entry point
+          # plus the audit pack assembly + markdown rendering.
+          PYTHONPATH=src python -c "
+          import json, sys
+          from agent_memory_contracts.audit import compute_audit_pack, audit_pack_to_markdown
+          bundle = [
+              {'id': 'src_demo', 'schema_version': '1.0.0', 'source_type': 'chatgpt',
+               'title': 'demo', 'origin_uri': None,
+               'raw_ref': {'kind': 'test'}, 'content_hash_sha256': 'a'*64,
+               'captured_at': '2026-06-18T00:00:00Z', 'observed_at': None,
+               'author_or_sender': None, 'participants': [],
+               'privacy_class': 'internal', 'custody_status': 'parsed',
+               'parser_version': 'v1', 'metadata': {}},
+              {'id': 'fact_demo', 'schema_version': '1.1.0', 'ledger_type': 'fact',
+               'status': 'active', 'confidence': 'high', 'scope': 'global',
+               'source_record_ids': ['src_demo'], 'episode_record_ids': [],
+               'evidence_span_ids': [], 'candidate_ids': [],
+               'reducer_decision_id': 'redmem_demo',
+               'observed_at': None, 'asserted_at': '2026-06-18T00:00:00Z',
+               'valid_from': None, 'valid_until': None, 'stale_after': None,
+               'created_at': '2026-06-18T00:00:00Z',
+               'updated_at': '2026-06-18T00:00:00Z',
+               'supersedes': [], 'superseded_by': [],
+               'freshness_score': None, 'metadata': {},
+               'subject': 'demo', 'predicate': 'is', 'object': 'demo',
+               'fact_text': 'demo'},
+              {'id': 'redmem_demo', 'schema_version': '1.0.0',
+               'decision_type': 'promote', 'target_candidate_ids': [],
+               'target_ledger_entry_ids': ['fact_demo'],
+               'evidence_span_ids': [], 'rationale': 'demo',
+               'decided_by': {'agent': 'demo', 'model': 'none'},
+               'decided_at': '2026-06-18T00:00:00Z', 'confidence': '0.8',
+               'risk_class': 'low', 'checks': {}, 'metadata': {}},
+          ]
+          pack = compute_audit_pack(bundle)
+          md = audit_pack_to_markdown(pack)
+          assert pack.bundle_fingerprint
+          assert pack.complete_chain_count == 1
+          assert 'COMPLETE' in md
+          print('audit pack id:', pack.id)
+          print('audit pack fingerprint:', pack.bundle_fingerprint)
+          print('audit pack COMPLETE chain count:', pack.complete_chain_count)
+          "
+
+      - name: Run runtime smoke
+        run: |
+          # Exercise the reference runtime end-to-end:
+          # ingest two sources, verify chain + coverage.
+          PYTHONPATH=src python -c "
+          import tempfile, os
+          from agent_memory_contracts import make_source_id
+          from agent_memory_contracts.runtime import MemoryStore, MemoryGate, verify_chain, verify_coverage
+          tmp = tempfile.mkdtemp()
+          store = MemoryStore(db_path=os.path.join(tmp, 'test.db'))
+          gate = MemoryGate(store)
+          for url, h, title in [('https://example.com/a', 'a'*64, 'smoke1'),
+                                ('https://example.com/b', 'b'*64, 'smoke2')]:
+              sid = make_source_id('chatgpt_conversation', url, h)
+              gate.submit_source({
+                  'id': sid, 'schema_version': '1.0.0',
+                  'source_type': 'chatgpt_conversation', 'title': title,
+                  'origin_uri': url,
+                  'raw_ref': {'kind': 'external_uri', 'value': url},
+                  'content_hash_sha256': h,
+                  'captured_at': '2026-06-18T00:00:00Z',
+                  'observed_at': '2026-06-18T00:00:00Z',
+                  'author_or_sender': 'tester', 'participants': [],
+                  'privacy_class': 'internal', 'custody_status': 'external_pointer',
+                  'parser_version': 'v1', 'metadata': {},
+              })
+          chain = verify_chain(store)
+          cov = verify_coverage(store)
+          print('runtime chain ok:', chain.ok, 'anchors checked:', chain.anchors_checked)
+          print('runtime coverage ok:', cov.ok, 'unanchored:', len(cov.unanchored))
+          print('runtime sources stored:', store.counts()['sources'])
+          "
+
   mypy:
     name: mypy (${{ matrix.python-version }})
     runs-on: ubuntu-latest
