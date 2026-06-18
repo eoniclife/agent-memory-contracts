@@ -1,15 +1,18 @@
 # agent-memory-contracts
 
 **JSON Schemas and Python contracts for AI agent memory integrity.**
+With a stdlib-only reference runtime and a 5-invariant acceptance
+suite for any product-side port.
 
 [![CI](https://github.com/eoniclife/agent-memory-contracts/actions/workflows/ci.yml/badge.svg)](https://github.com/eoniclife/agent-memory-contracts/actions/workflows/ci.yml)
 [![mypy](https://github.com/eoniclife/agent-memory-contracts/actions/workflows/ci.yml/badge.svg?job=mypy)](https://github.com/eoniclife/agent-memory-contracts/actions/workflows/ci.yml)
-[![PyPI](https://img.shields.io/pypi/v/agent-memory-contracts)](https://pypi.org/project/agent-memory-contracts/)
+[![Tests](https://img.shields.io/badge/tests-729_passing-brightgreen)](https://github.com/eoniclife/agent-memory-contracts/tree/main/tests)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](https://www.python.org/downloads/)
 [![Standard library only](https://img.shields.io/badge/dependencies-none-success)](https://github.com/eoniclife/agent-memory-contracts)
 [![Schemas](https://img.shields.io/badge/JSON_Schemas-23-blue)](https://github.com/eoniclife/agent-memory-contracts/tree/main/src/agent_memory_contracts/schemas)
-[![Tests](https://img.shields.io/badge/tests-729_passing-brightgreen)](https://github.com/eoniclife/agent-memory-contracts/tree/main/tests)
+[![Public API](https://img.shields.io/badge/public_names-162-blue)](https://github.com/eoniclife/agent-memory-contracts/blob/main/docs/STABILITY.md)
+[![TestPyPI](https://img.shields.io/badge/TestPyPI-v1.2.0-blue)](https://test.pypi.org/project/agent-memory-contracts/)
 
 > The core design question this library answers: *if an LLM extracts
 > something from raw sources, how do you keep that extraction from

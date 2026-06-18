@@ -9,7 +9,10 @@ for someone building an AI agent?"
 ```bash
 git clone https://github.com/eoniclife/agent-memory-contracts.git
 cd agent-memory-contracts
-pip install -e ".[dev]"
+# Install all extras to run the full test suite, the example
+# smoke loop, the audit CLI smoke, and the runtime smoke in
+# CI. For just the contracts layer, `[jsonschema]` is enough.
+pip install -e ".[dev,jsonschema,langchain,mcp]"
 pytest -q
 ```
 

@@ -188,15 +188,52 @@ allowed to depend on them.
 
 ## Future plans
 
-The contracts are frozen at `1.0.0` for the planes currently shipped.
-Additions in `0.x` releases:
+The contracts are frozen at `1.0.0` for the planes currently
+shipped; v1.1.0 added a `freshness_score` field (with the
+v1.0.0 → v1.1.0 migration step registered in
+`default_migrator()`); v1.2.0 added the audit pack generator
+and the reference runtime (sqlite3, stdlib-only) under
+`agent_memory_contracts.audit` and
+`agent_memory_contracts.runtime`. Subsequent `1.x` releases
+are backwards-compatible; breaking changes require a `2.0.0`
+with a 3-minor-version deprecation window per the policy in
+`docs/STABILITY.md`.
 
-- **A `taste-card` focused sub-package** with a smaller surface for
-  teams that only need taste/preference memory.
-- **A `worker_output_claim` schema** describing what a worker can
-  claim it produced (separate from `CompletionArtifact` which is
-  kernel-internal).
-- **PyPI publication** of the Python package.
+Additions shipped in v1.x so far:
 
-Breaking changes will not happen in `0.x`. A `1.0` will require a
-deprecation window for any breaking change.
+- **Audit pack** (`compute_audit_pack` /
+  `audit_pack_to_markdown`) — chain-of-custody report behind
+  any bundle.
+- **Reference runtime** (`agent_memory_contracts.runtime`) —
+  MemoryStore + MemoryGate + verify_chain + verify_coverage +
+  answer + build_context_pack. stdlib-only; the conformance
+  test for any product-side port.
+- **LangChain and MCP integrations** under
+  `agent_memory_contracts.integrations`.
+- **Decay primitives** (`apply_decay`, `DecayPolicy`,
+  `DecayScore`) — freshness scoring for the context_pack
+  compiler.
+- **Schema migration framework** (`MigrationStep`,
+  `SchemaMigrator`, `default_migrator`) — the v1.0.0 →
+  v1.1.0 step is the first concrete migration.
+- **PyPI publication** — `agent-memory-contracts` is on
+  TestPyPI as of v1.2.0; promotion to real PyPI is held
+  pending external review.
+
+Future directions:
+
+- **Postgres backend** behind `StorageBackend` (product repo,
+  mapped in `docs/ROADMAP-to-product.md`).
+- **LLM answerer** at the template boundary in
+  `runtime.grounding` (the deterministic template is the
+  conformance test; the LLM is the product insertion point).
+- **A `taste-card` focused sub-package** with a smaller
+  surface for teams that only need taste/preference memory.
+- **A `worker_output_claim` schema** describing what a worker
+  can claim it produced (separate from `CompletionArtifact`
+  which is kernel-internal).
+
+The five differentiator invariants in
+`tests/invariants/` are the contract for any of these
+additions. If a port must weaken an invariant to pass a
+feature, the rule is **stop and escalate**.
