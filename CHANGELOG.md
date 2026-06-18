@@ -5,6 +5,182 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-06-18
+
+The "pilot readiness" release. Adds the audit pack generator (a
+chain-of-custody report behind any bundle), a complete stdlib-only
+reference runtime that exercises the integrity layer end-to-end,
+and the ADR-14 differentiator suite (5 invariants that double as
+the port's acceptance gate). Backwards-compatible with v1.1.0;
+no schema migration required.
+
+### Added
+
+- **Audit pack generator.** New `agent_memory_contracts.audit`
+  module (8 public names: `AuditPack`, `AuditChainEntry`,
+  `AuditEvidenceRef`, `AuditRejection`, `AuditSupersession`,
+  `compute_audit_pack`, `audit_pack_to_markdown`,
+  `DEFAULT_AUDIT_TITLE`). Walks the full authorization chain
+  behind every trusted ledger entry (entry → reducer decision →
+  candidates → evidence spans → sources), collects rejections in
+  the period and the supersession changelog, and ties the result
+  to the `bundle_fingerprint`. Broken chains are flagged
+  `INCOMPLETE`, not raised. CFO-readable Markdown report.
+  Frozen dataclasses; content-derived `audit_*` pack id; mirrors
+  the hygiene module's API and id discipline.
+
+- **CLI: `audit <path> [--as-of] [--title] [--json]`.** Mirrors
+  the existing `hygiene` subcommand (Markdown by default, JSON
+  envelope with `--json`; exit 0/1 semantics unchanged).
+
+- **Reference runtime.** New
+  `agent_memory_contracts.runtime` subpackage — a complete
+  stdlib-only (sqlite3) implementation of how a runtime holds and
+  moves the six planes' records. Four modules:
+  - `runtime.store` (`MemoryStore`, `StorageBackend`,
+    `MemoryStore` materializes supersession at read; append-only
+    SQL triggers; insert-only edge tables; status_overrides for
+    retract/contest/archive; `full_scope` anchors per batch).
+  - `runtime.gate` (`MemoryGate`, `IngestReceipt`,
+    `PromoteReceipt` — the single validated write path with
+    idempotent ingestion and a single transactional `promote()`
+    carrying decision + entries + supersessions; library
+    validation errors verbatim through `ValidationRejectedError`;
+    first-commit-wins `ConflictError`).
+  - `runtime.anchors` (`AnchorReceipt`, `AnchorDivergence`,
+    `ChainVerification`, `CoverageReport`, `verify_chain`,
+    `verify_coverage` — every committed batch gets a hash-chained
+    anchor; tampering, including a hand-armed-guard bypass, is
+    detected).
+  - `runtime.grounding` (`build_context_pack`, `answer`,
+    `verify_grounding`, `related_candidates`, `AnswerResult`,
+    `PackBuildResult`, `RuntimeBuildReceipt`, `Citation` —
+    deterministic, receipted pack builds; cite-or-refuse
+    answer; mechanical post-check that degrades to refusal,
+    never to an uncited answer).
+
+  27 public names in `runtime.__all__`; implementation-detail
+  constants (id prefixes, override mappings, scoring weights)
+  prefixed with `_` and out of the frozen surface.
+
+- **ADR-14 differentiator invariants** in `tests/invariants/`.
+  Each file is a demo script and a sales claim; each invariant
+  has positive + adversarial tests:
+  - `test_no_silent_writes.py` — every public store/gate method
+    fuzzed with trusted-plane payloads; only `promote()` grows
+    the trusted tables; raw SQL blocked by the schema; even a
+    hand-armed guard bypass is flagged by coverage.
+  - `test_full_provenance.py` — chain walk
+    entry→decision→candidate→span→source; audit pack agrees
+    (9/9 complete in the seeded corpus); proven non-tautological
+    by a hostile deletion; superseded cells keep their full
+    chains; quarantined poisons have decision trails, not
+    entries.
+  - `test_reciprocal_supersession.py` — materialized reciprocity
+    + exact temporal handoff; a two-thread race on the same
+    target yields exactly one edge, the loser gets a clean
+    `ConflictError` naming the winner.
+  - `test_deterministic_receipts.py` — same state + request =
+    identical pack id = identical fingerprint; tamper-tested.
+  - `test_grounded_or_refused.py` — refusal threshold + mechanical
+    `[Fi]` post-check; rejected candidates never surface;
+    refused answers are persisted as well as answered ones.
+
+- **Two new end-to-end demos.**
+  - `examples/poisoning_demo/` — a memory-poisoning attack (a
+    spoofed-sender payout memo) against two stores: a naive
+    ~80-line "extract, append, retrieve" baseline (the attack
+    lands; the forged rate is served as truth), and the
+    contracts-governed store (forgery rejected in the candidate
+    plane with a real `MemoryReducerDecision` receipt; trusted
+    ledger's `bundle_fingerprint` byte-identical before and
+    after). Emits `report.md` and `summary.json`.
+  - `examples/arthashila_demo/` — the real launch-week
+    Arthashila NBFC dataset (30 emails, 5 policy documents, 2
+    poisoned documents) through the contracts end-to-end.
+    Records 11 key facts including the v3→v4 supersession
+    (governed, one edge) and the two dataset-documented poisons
+    (rejected with kill chains). The `--runtime` flag runs the
+    same flow through the new `runtime.store` + `runtime.gate` +
+    `runtime.grounding` + `runtime.anchors` end-to-end (37
+    sources, 14 spans, 11 candidates; 7 promotes, 2 reject
+    quarantines, byte-identical trusted-ledger fingerprints
+    against the static path; chain and coverage verified).
+    Skips cleanly if the dataset isn't available.
+
+- **`[langchain]` and `[mcp]` extras are now installed in CI.**
+  Both mypy `--strict` and the example smoke test need them at
+  import time; both were failing CI on main because the extras
+  were optional. CI now installs `.[dev,jsonschema,langchain,mcp]`.
+
+- **Spec doc** `docs/specs/sprint_28_audit_and_runtime.md` — the
+  durable rationale for the v1.2.0 expansion.
+
+- **New doc** `docs/ROADMAP-to-product.md` — the successor map
+  from this reference runtime to the product repo
+  (Postgres/FastAPI/console/MCP), ADR-by-ADR, with the
+  differentiator invariants framed as the port's acceptance
+  gate. Read this before any porting work.
+
+- **README** gains a short "Runtime (reference implementation)"
+  section with the `--runtime` demo invocation and a link to
+  the differentiator invariants.
+
+### Changed
+
+- `docs/STABILITY.md` adds two new sections: "Audit pack
+  (v1.2.0)" and "Runtime (v1.2.0, reference implementation)".
+  The runtime section explicitly distinguishes the **frozen
+  public surface** (27 names) from the implementation-detail
+  constants (prefixed `_`, out of `__all__`).
+- The runtime's 4 internal constants (`DEFAULT_TENANT`,
+  `LEDGER_ID_PREFIXES`, `STATUS_BY_OVERRIDE_DECISION`,
+  `PACK_RANK_WEIGHTS`) are now private (`_`-prefixed). They are
+  implementation details of the sqlite3 reference; a Postgres
+  port would not reuse them. The frozen public surface is the
+  classes, errors, and 7 verbs (`answer`,
+  `build_context_pack`, `related_candidates`,
+  `verify_grounding`, `verify_chain`, `verify_coverage`,
+  `full_scope`).
+- `.github/workflows/ci.yml` — install all extras
+  (`.[dev,jsonschema,langchain,mcp]`) in both the `test` and
+  `mypy` jobs. The example smoke loop now also walks
+  `examples/*/run.py` so the new demos run in CI.
+
+### Fixed
+
+- **`compilation.py` set-iteration order in
+  `evidence.source_record_ids` was non-deterministic across
+  processes** (it iterated a `set`, and `set` ordering depends
+  on `PYTHONHASHSEED`). The field feeds the pack's content-
+  derived id, so the bug made pack ids process-dependent.
+  Caught by the runtime demo's idempotency check. Now sorted.
+  Regression test added. (Contributed by the runtime work;
+  credit to the audit.)
+
+### Notes
+
+- **The runtime is a reference, not a production recommendation.**
+  Its purpose is (a) to make the contract semantics executable
+  and (b) to serve as the conformance test for any product-side
+  port. The 5 invariants in `tests/invariants/` are the port's
+  acceptance gate — if an invariant must be weakened to make a
+  product feature pass, stop and escalate.
+- **Deliberate adaptations** (sqlite3 instead of Postgres,
+  `status_overrides` for retract/contest/archive, synthesized
+  `ProjectStateSnapshot` per pack, deterministic template
+  answerer instead of an LLM, idempotent ingest of the
+  ingestion planes) are documented inline and in
+  `docs/ROADMAP-to-product.md`.
+- **Arthashila test suite skips cleanly** if the launch-week
+  dataset isn't at the expected path; pass `--dataset` to
+  override. The static and runtime demos use the same fixtures
+  in the repo so the test suite exercises them without external
+  data.
+- **No schema migration required.** v1.2.0 is additive; v1.1.0
+  bundles continue to validate and load. The new audit and
+  runtime modules are read-only on the existing contract.
+
 ## [1.0.0] - 2026-06-07
 
 The first stable release of `agent-memory-contracts`. The public

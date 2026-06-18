@@ -26,7 +26,10 @@ jobs:
       - name: Install package + dev deps
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          # Install all optional extras so the example
+          # smoke test and the optional-dep integration
+          # tests can exercise the full surface.
+          pip install -e ".[dev,jsonschema,langchain,mcp]"
 
       - name: Run quickstart example
         run: |
@@ -39,7 +42,7 @@ jobs:
       - name: Run examples smoke test
         run: |
           set -e
-          for f in examples/*.py; do
+          for f in examples/*.py examples/*/run.py; do
             echo ">>> $f"
             PYTHONPATH=src python "$f"
           done
@@ -63,7 +66,11 @@ jobs:
       - name: Install package + dev deps
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          # Install the [langchain] and [mcp] extras so
+          # mypy --strict can type-check the integration
+          # submodules (which import fastmcp and
+          # langchain_classic at module level).
+          pip install -e ".[dev,jsonschema,langchain,mcp]"
 
       - name: Run mypy
         run: |

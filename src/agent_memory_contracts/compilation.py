@@ -790,9 +790,13 @@ def _build_context_pack(
                 "Either enable require_source_coverage=False, or pass a bundle with evidence."
             )
     evidence = {
-        "source_record_ids": [
+        # Sorted: selected_ids is a set, and this list feeds the
+        # pack's identity payload — unsorted iteration would make
+        # the content-derived pack id depend on PYTHONHASHSEED
+        # (same inputs, different id across processes).
+        "source_record_ids": sorted(
             rid for rid in selected_ids if rid.startswith("src_")
-        ],
+        ),
         "episode_record_ids": [],
         "evidence_span_ids": sorted(set(evidence_span_ids) | set(primary_evidence)),
         "primary_evidence_span_ids": sorted(set(primary_evidence)),

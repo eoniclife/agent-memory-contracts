@@ -58,4 +58,14 @@ Pipfile.lock
 
 # Local analysis / planning scratchpads (not part of the public repo)
 COMPETITIVE_ANALYSIS.md
+DEEP_RESEARCH_REPORT.md
+FUNDING_OPPORTUNITIES.md
+ROADMAP.md
 YC_APPLICATION_DRAFT.md
+
+# Generated demo output (examples write reports here at runtime)
+examples/*/out/
+
+# Local venvs (e.g. .venv-smoke, .venv-build used by contributor scripts)
+.venv-*/
+.mavis/

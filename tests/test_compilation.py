@@ -299,6 +299,26 @@ class TestCompileContextPack(unittest.TestCase):
             r2.context_pack.trusted_memory,
         )
 
+    def test_pack_identity_is_order_and_hashseed_independent(self) -> None:
+        """Regression: ``evidence.source_record_ids`` feeds the
+        pack's identity payload and was built by iterating a
+        ``set`` -- making the content-derived pack id depend on
+        PYTHONHASHSEED across processes. The executable form of
+        the fix: the list is sorted, and permuting the input
+        bundle does not change the pack id."""
+        bundle = _trusted_bundle()
+        r1 = compile_context_pack(bundle, task=_task())
+        r2 = compile_context_pack(list(reversed(bundle)), task=_task())
+        self.assertEqual(
+            r1.context_pack.evidence["source_record_ids"],
+            sorted(r1.context_pack.evidence["source_record_ids"]),
+        )
+        self.assertEqual(r1.context_pack.id, r2.context_pack.id)
+        self.assertEqual(
+            r1.context_pack.pack_hash_sha256,
+            r2.context_pack.pack_hash_sha256,
+        )
+
     def test_unsupported_claim_excluded(self) -> None:
         """A fact citing a missing source/span is excluded
         by the source-coverage filter."""

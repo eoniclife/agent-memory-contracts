@@ -14,6 +14,12 @@ operational primitives of the library:
                  (counts by plane / type / privacy, temporal state,
                  evidence integrity). Markdown by default, JSON with
                  ``--json``.
+- ``audit``      Compute an audit pack for a bundle: every trusted
+                 ledger entry with its full authorization chain
+                 (entry -> decision -> candidates -> evidence ->
+                 sources), rejections in the period, and the
+                 supersession changelog. Markdown by default, JSON
+                 with ``--json``.
 
 The CLI is intentionally thin: it parses a file, calls into the
 public Python API, and shapes the output. All real work stays in the
@@ -29,6 +35,7 @@ Usage::
     python -m agent_memory_contracts fingerprint path/to/bundle.json
     python -m agent_memory_contracts diff before.json after.json
     python -m agent_memory_contracts merge a.json b.json c.json --prefer last
+    python -m agent_memory_contracts audit path/to/bundle.jsonl
     python -m agent_memory_contracts --json validate path/to/record.json --schema source_record
     python -m agent_memory_contracts --json fingerprint path/to/bundle.json
     python -m agent_memory_contracts --json diff before.json after.json
@@ -80,6 +87,12 @@ from agent_memory_contracts.hygiene import (
     MemoryHygieneReport,
     compute_hygiene_report,
     hygiene_report_to_markdown,
+)
+from agent_memory_contracts.audit import (
+    DEFAULT_AUDIT_TITLE,
+    AuditPack,
+    audit_pack_to_markdown,
+    compute_audit_pack,
 )
 
 
@@ -691,6 +704,71 @@ def cmd_hygiene(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_audit(args: argparse.Namespace) -> int:
+    """Compute an AuditPack for a bundle. Default output is a
+    Markdown report; with ``--json``, a JSON envelope.
+    """
+    path = Path(args.path)
+    if not path.exists():
+        if args.json:
+            _emit_json(
+                {"ok": False, "path": str(path),
+                 "error": f"file not found: {path}"},
+                to_stderr=True,
+            )
+        else:
+            print(f"audit: file not found: {path}", file=sys.stderr)
+        return 1
+    try:
+        bundle = read_bundle(path)
+    except FileNotFoundError as exc:
+        if args.json:
+            _emit_json(
+                {"ok": False, "path": str(path),
+                 "error": f"file not found: {exc.filename or path}"},
+                to_stderr=True,
+            )
+        else:
+            print(
+                f"audit: file not found: {exc.filename or path}",
+                file=sys.stderr,
+            )
+        return 1
+    except (json.JSONDecodeError, ValueError) as exc:
+        if args.json:
+            _emit_json(
+                {"ok": False, "path": str(path),
+                 "error": f"failed to parse {path}: {exc}"},
+                to_stderr=True,
+            )
+        else:
+            print(
+                f"audit: failed to parse {path}: {exc}",
+                file=sys.stderr,
+            )
+        return 1
+    try:
+        pack = compute_audit_pack(
+            bundle,
+            as_of=args.as_of,
+            title=args.title,
+        )
+    except (ValueError, TypeError) as exc:
+        if args.json:
+            _emit_json(
+                {"ok": False, "path": str(path), "error": str(exc)},
+                to_stderr=True,
+            )
+        else:
+            print(f"audit: {exc}", file=sys.stderr)
+        return 1
+    if args.json:
+        _emit_json({"ok": True, **pack.to_dict()})
+    else:
+        print(audit_pack_to_markdown(pack), end="")
+    return 0
+
+
 # ---------------------------------------------------------------------------
 # Version resolution
 # ---------------------------------------------------------------------------
@@ -762,7 +840,7 @@ def _build_parser() -> argparse.ArgumentParser:
         prog="python -m agent_memory_contracts",
         description=(
             "agent-memory-contracts CLI: validate, fingerprint, diff, "
-            "merge, and hygiene for agent memory bundles."
+            "merge, hygiene, and audit for agent memory bundles."
         ),
         allow_abbrev=False,
         parents=[json_parent],
@@ -909,6 +987,39 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     p_hygiene.set_defaults(_func=cmd_hygiene)
+
+    p_audit = sub.add_parser(
+        "audit",
+        parents=[json_parent],
+        help="Compute an audit pack for a bundle.",
+        description=(
+            "Compute an AuditPack for a bundle: every trusted ledger "
+            "entry with its full authorization chain (entry -> "
+            "authorizing decision -> candidates -> evidence spans -> "
+            "sources), every rejected candidate decision in the "
+            "period, and the supersession changelog. Broken chains "
+            "are flagged INCOMPLETE, not errors. Default output is a "
+            "Markdown report; with --json, a JSON envelope."
+        ),
+    )
+    p_audit.add_argument(
+        "path", help="Path to the JSON or JSONL bundle.",
+    )
+    p_audit.add_argument(
+        "--as-of",
+        dest="as_of",
+        default=None,
+        help=(
+            "ISO 8601 UTC 'computed at' timestamp. Defaults to now. "
+            "Pass a fixed value to make the pack id reproducible."
+        ),
+    )
+    p_audit.add_argument(
+        "--title",
+        default=DEFAULT_AUDIT_TITLE,
+        help="Pack title (the Markdown report's H1).",
+    )
+    p_audit.set_defaults(_func=cmd_audit)
 
     return parser
 

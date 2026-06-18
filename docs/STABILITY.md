@@ -245,6 +245,71 @@ compiler to weight records in the selection.
 | `default_decay_policy` | `decay` | The default policy |
 | `v1_0_0_to_v1_1_0_step` | `decay` | The first concrete schema migration step |
 
+### Audit pack (v1.2.0)
+
+The audit pack walks the full authorization chain behind every
+trusted ledger entry (entry → reducer decision → candidates →
+evidence spans → sources), collects rejections in the period and
+the supersession changelog, and ties the result to the bundle
+fingerprint. Broken chains are flagged `INCOMPLETE`, not raised.
+
+| Name | Module | Description |
+| --- | --- | --- |
+| `AuditPack` | `audit` | The pack: chains, rejections, supersessions, counts |
+| `AuditChainEntry` | `audit` | One ledger entry's authorization chain |
+| `AuditEvidenceRef` | `audit` | One cited span, resolved to its source |
+| `AuditRejection` | `audit` | One `reject` reducer decision |
+| `AuditSupersession` | `audit` | One governed replacement event |
+| `compute_audit_pack` | `audit` | Compute a pack for a bundle |
+| `audit_pack_to_markdown` | `audit` | Format a pack as a CFO-readable report |
+| `DEFAULT_AUDIT_TITLE` | `audit` | The default pack title |
+
+### Runtime (v1.2.0, reference implementation)
+
+The runtime subpackage is a complete, stdlib-only (sqlite3)
+**reference implementation** of how a product holds and moves
+governed memory records. The contracts above define *what* a
+record is; the runtime defines *how* a runtime holds and moves
+them. The product repo (Postgres/FastAPI/console) plugs in via
+the `StorageBackend` protocol; the sqlite3 implementation is the
+acceptance reference.
+
+The runtime is a **reference**, not a recommendation for
+production. Its purpose is to (a) make the contract semantics
+executable and (b) serve as the conformance test for any
+product-side port. The invariants in `tests/invariants/` are
+the port's acceptance gate.
+
+| Name | Module | Description |
+| --- | --- | --- |
+| `MemoryStore` | `runtime.store` | The sqlite3 six-plane store; append-only triggers; read-time supersession materialization |
+| `StorageBackend` | `runtime.store` | The protocol a product-side port implements |
+| `MemoryGate` | `runtime.gate` | The single validated write path: idempotent ingestion + one transactional `promote()` |
+| `IngestReceipt` | `runtime.gate` | Receipt for an idempotent ingest (created or already-exists) |
+| `PromoteReceipt` | `runtime.gate` | Receipt for a `promote()` (decisions applied, edges written) |
+| `AnchorReceipt` | `runtime.anchors` | A single committed-batch audit anchor |
+| `AnchorDivergence` | `runtime.anchors` | The first point where `verify_chain` found a mismatch |
+| `ChainVerification` | `runtime.anchors` | Result of `verify_chain()`: clean or the first divergence |
+| `CoverageReport` | `runtime.anchors` | Result of `verify_coverage()`: every trusted row accounted for |
+| `LedgerSearchHit` | `runtime.store` | One result from `search_entries()` |
+| `Citation` | `runtime.grounding` | One numbered `[Fi]` citation in an `answer()` |
+| `AnswerResult` | `runtime.grounding` | The shape of an `answer()` return: answered or refused |
+| `PackBuildResult` | `runtime.grounding` | The shape of a `build_context_pack()` return: pack + receipts + coverage |
+| `RuntimeBuildReceipt` | `runtime.grounding` | Receipt for a pack build: ranking + weights + scope |
+| `answer` | `runtime.grounding` | Cite-or-refuse answer: refusal below threshold; otherwise cited template |
+| `build_context_pack` | `runtime.grounding` | Deterministic ContextPack build with state synthesis + ranking |
+| `related_candidates` | `runtime.grounding` | The candidates the refusal returned for context |
+| `verify_grounding` | `runtime.grounding` | Mechanical post-check: every sentence carries a resolving `[Fi]` |
+| `verify_chain` | `runtime.anchors` | Recompute every anchor; return the first divergence or "clean" |
+| `verify_coverage` | `runtime.anchors` | Flag any trusted row no anchor accounts for |
+| `full_scope` | `runtime.anchors` | The full scope name for a committed batch anchor |
+| `ConflictError` | `runtime.store` | First-commit-wins conflict (double promotion / supersession / override) |
+| `IdMismatchError` | `runtime.store` | Server-recomputed id did not match a forged id (security) |
+| `NotFoundError` | `runtime.store` | A referenced record does not exist |
+| `StoreError` | `runtime.store` | Base class for all runtime store errors |
+| `ValidationRejectedError` | `runtime.store` | Library `validate_*_bundle` errors verbatim through the gate |
+| `canonical_json` | `runtime.store` | Deterministic JSON serializer (used by `AnchorReceipt` payloads) |
+
 ### CLI
 
 The library ships a CLI via `python -m agent_memory_contracts`:
@@ -256,6 +321,7 @@ The library ships a CLI via `python -m agent_memory_contracts`:
 | `diff` | `__main__` | Diff two bundles |
 | `merge` | `__main__` | Merge N bundles |
 | `hygiene` | `__main__` | Compute a hygiene report |
+| `audit` | `__main__` | Compute an audit pack |
 
 A console script `agent-memory-contracts` is installed
 alongside the module form.

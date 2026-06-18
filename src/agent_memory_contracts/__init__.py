@@ -115,6 +115,16 @@ from .hygiene import (
     compute_hygiene_report,
     hygiene_report_to_markdown,
 )
+from .audit import (
+    DEFAULT_AUDIT_TITLE,
+    AuditChainEntry,
+    AuditEvidenceRef,
+    AuditPack,
+    AuditRejection,
+    AuditSupersession,
+    audit_pack_to_markdown,
+    compute_audit_pack,
+)
 from .citations import (
     CitationEdge,
     CitationGraph,
@@ -171,7 +181,7 @@ from .compilation import (
     compile_context_pack,
 )
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 __all__ = [
     # Evidence plane
@@ -257,6 +267,15 @@ __all__ = [
     "MemoryHygieneReport",
     "compute_hygiene_report",
     "hygiene_report_to_markdown",
+    # Audit pack (added in 1.2.0)
+    "DEFAULT_AUDIT_TITLE",
+    "AuditEvidenceRef",
+    "AuditChainEntry",
+    "AuditRejection",
+    "AuditSupersession",
+    "AuditPack",
+    "compute_audit_pack",
+    "audit_pack_to_markdown",
     # Citation graph (added in 0.8.0)
     "CitationNode",
     "CitationEdge",

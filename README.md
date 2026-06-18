@@ -9,11 +9,42 @@
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](https://www.python.org/downloads/)
 [![Standard library only](https://img.shields.io/badge/dependencies-none-success)](https://github.com/eoniclife/agent-memory-contracts)
 [![Schemas](https://img.shields.io/badge/JSON_Schemas-23-blue)](https://github.com/eoniclife/agent-memory-contracts/tree/main/src/agent_memory_contracts/schemas)
-[![Tests](https://img.shields.io/badge/tests-325_passing-brightgreen)](https://github.com/eoniclife/agent-memory-contracts/tree/main/tests)
+[![Tests](https://img.shields.io/badge/tests-729_passing-brightgreen)](https://github.com/eoniclife/agent-memory-contracts/tree/main/tests)
 
 > The core design question this library answers: *if an LLM extracts
 > something from raw sources, how do you keep that extraction from
 > silently becoming "memory" the agent treats as truth?*
+
+The contracts enforce five rules in the type system, because the
+alternative is a runtime bug you'll only catch in production:
+
+1. **Untrusted extraction cannot become memory without a reducer.**
+   Candidates have id prefix `cand_*`; ledger entries have `fact_` /
+   `pref_` / `dec_`. A `Candidate*` cannot carry the fields a ledger
+   entry needs, and a `LedgerEntry` will refuse to validate if it
+   carries candidate-only fields.
+2. **Every trusted record is authorized by an explicit reducer
+   decision.** The validator rejects a ledger entry whose
+   `reducer_decision_id` doesn't authorize it.
+3. **Supersession is a directed graph, not a flag.** If entry B
+   supersedes entry A, then A's `superseded_by` must contain B and
+   B's `supersedes` must contain A. The bundle validator checks
+   reciprocity and temporal ordering.
+4. **IDs are content-derived, not assigned.** A record with the
+   same evidence and the same normalized payload has the same id
+   forever. Reproducible, deduplicatable, falsifiable.
+5. **Generated views are views, not memory.** A `ContextPack` is a
+   task-ready bundle that carries a `BuildReceipt` (what was
+   selected) and a `ValidationReport` (what passed). The receipt,
+   not the pack, is the audit trail.
+
+The same contracts ship a stdlib-only **reference runtime** (sqlite3,
+6 planes, single transactional write path, hash-chained audit
+anchors, cite-or-refuse answer) and a 5-invariant acceptance suite
+([`tests/invariants/`](tests/invariants/)) that doubles as the
+port-spec for any product-side implementation. See
+[`docs/ROADMAP-to-product.md`](docs/ROADMAP-to-product.md) for the
+ADRs that map to the runtime.
 
 ## Install
 
@@ -21,12 +52,14 @@
 pip install agent-memory-contracts
 ```
 
-The library has zero runtime dependencies (stdlib only). For
-`python -m agent_memory_contracts validate` and the optional
-JSON Schema validator, install with the `jsonschema` extra:
+The library has zero runtime dependencies (stdlib only). The
+optional extras are:
 
 ```bash
-pip install agent-memory-contracts[jsonschema]
+pip install agent-memory-contracts[jsonschema]   # for the JSON Schema validator + CLI validate
+pip install agent-memory-contracts[langchain]    # for the BaseMemory integration
+pip install agent-memory-contracts[mcp]          # for the FastMCP server
+pip install agent-memory-contracts[all]          # everything
 ```
 
 After install, the CLI is available as both a module and a console
@@ -38,8 +71,9 @@ agent-memory-contracts --version    # same, via the [project.scripts] entry poin
 ```
 
 This library was extracted from a 30+ sprint falsification-first build
-of a private agent memory kernel. The schemas and id formats are
-stable and treated as `1.0.0` in this initial release.
+of a private agent memory kernel. The schemas, id formats, and
+public API are frozen at v1.0.0; subsequent 1.x releases are
+backwards-compatible.
 
 ## The six memory planes
 
@@ -106,11 +140,17 @@ Three runnable end-to-end examples:
 - [`examples/extract_taste_cards.py`](examples/extract_taste_cards.py) -- full transcript -> multiple taste cards, with contrast pairs
 - [`examples/reference_reducer.py`](examples/reference_reducer.py) -- complete reference reducer (~1000 lines) with three worked scenarios: happy path, rejection of low-confidence / no-evidence / stale candidates, and a deliberate validator-enforcement case. This is the canonical answer to "what does a contracts-library reducer look like in production?"
 - [`examples/conflict_resolution.py`](examples/conflict_resolution.py) -- five worked scenarios: pick-one resolution, merge resolution, split resolution, weekly hygiene report, windowed + diff-augmented hygiene report.
+- [`examples/decay.py`](examples/decay.py) -- freshness scoring on a small bundle of facts; first concrete schema migration.
+- [`examples/company_brain_demo.py`](examples/company_brain_demo.py) -- the full 7-stage pipeline (ingest → extract → reduce → cite → access → embed → compile) end to end.
+- [`examples/langchain_memory.py`](examples/langchain_memory.py) -- LangChain `BaseMemory` integration; replace `ConversationBufferMemory()` with `ContractsMemory()`.
+- [`examples/mcp_server.py`](examples/mcp_server.py) -- expose `validate_bundle`, `compile_context`, `check_access` as MCP tools over stdio.
+- [`examples/poisoning_demo/run.py`](examples/poisoning_demo/run.py) -- one memory-poisoning attack against two stores: a naive extract-append-retrieve store (silently poisoned) and a contracts-governed store (forgery rejected with a receipt). See [Poisoning demo](#poisoning-demo).
+- [`examples/arthashila_demo/build.py`](examples/arthashila_demo/build.py) -- the real NBFC dataset through the contracts end to end, with the `--runtime` flag running it through the reference runtime. Skips cleanly if the dataset isn't available.
 
 ## What's in the box
 
 - **23 JSON Schemas** (Draft 2020-12) in `src/agent_memory_contracts/schemas/`
-- **17 Python modules** of `frozen=True` dataclasses and validators
+- **37 Python modules** of `frozen=True` dataclasses and validators
 - **5 bundle validators** that reject the bundle on dangling references,
   non-reciprocal supersession, candidate/ledger field leakage, and
   reducer authorization mismatch
@@ -140,17 +180,22 @@ Three runnable end-to-end examples:
   `iter_validated_jsonl` for streaming.
 - **CLI** (`python -m agent_memory_contracts`) for the non-Python
   use case: validate a JSON or JSONL file against a schema, compute
-  a bundle fingerprint, diff two bundles, or merge N bundles into one.
-  Stdlib `argparse`. Optional `--json` flag on every subcommand for
+  a bundle fingerprint, diff two bundles, merge N bundles into one,
+  compute a hygiene report, or compute an audit pack. Stdlib
+  `argparse`. Optional `--json` flag on every subcommand for
   programmatic consumption.
 - **Zero runtime dependencies** (stdlib only)
-- **~5,000 lines of Python**, ~600 lines of JSON Schema
-- **325 tests** covering id derivation, contract validation, bundle
-  integrity, temporal queries, the bundle fingerprint, diff, and
-  merge primitives, the optional JSON Schema validator, the
-  CLI (including `--json` mode), the reference reducer, the
-  SQLite-to-contracts migration example, conflict resolution,
-  and the memory hygiene report
+- **~17,000 lines of Python**, ~600 lines of JSON Schema
+- **729 tests** (plus 23 subtests, 1 environment-skipped) covering
+  id derivation, contract validation, bundle integrity, temporal
+  queries, the bundle fingerprint, diff, and merge primitives, the
+  optional JSON Schema validator, the CLI (including `--json` mode),
+  the reference reducer, the SQLite-to-contracts migration example,
+  conflict resolution, the memory hygiene report, the audit pack,
+  the decay primitives, the LangChain and MCP integrations, the
+  schema migration framework, the 5 differentiator invariants, the
+  reference runtime (store, gate, anchors, grounding), the
+  poisoning demo, and the Arthashila demo
 - **`mypy --strict` clean** on the library code (CI gate)
 - **Stdlib-only benchmark suite** at `benchmarks/` for the three
   bundle primitives (100/1k/10k/50k records, ~135ms for 50k
@@ -169,6 +214,13 @@ Three runnable end-to-end examples:
   temporal state, evidence integrity. CLI subcommand
   `hygiene <path>` produces a Markdown report (or JSON with
   `--json`).
+- **Audit pack** (`compute_audit_pack` /
+  `audit_pack_to_markdown`): the chain of custody behind a
+  bundle — every trusted ledger entry with its full
+  authorization chain (entry → decision → candidates →
+  evidence → sources), rejections in the period, and the
+  supersession changelog. CLI subcommand `audit <path>`
+  produces a Markdown report (or JSON with `--json`).
 
 ## Design principles
 
@@ -202,6 +254,121 @@ the alternative is a runtime bug you'll only catch in production.
    same fingerprint. A bundle is treated as a set of records
    keyed by ``id``; duplicate ids are collapsed (last write wins)
    before hashing.
+
+## Poisoning demo
+
+What does the reducer boundary actually buy you? The runnable demo at
+[`examples/poisoning_demo/`](examples/poisoning_demo/) attacks two
+memory stores with the same forged document (a spoofed-sender payout
+memo, the classic BEC shape):
+
+```bash
+PYTHONPATH=src python examples/poisoning_demo/run.py
+```
+
+- **Store A** ("silent", ~80 lines of the usual architecture:
+  extract dict -> append list -> keyword retrieve) swallows the
+  forgery and starts serving the attacker's number as truth.
+- **Store B** (the same extraction fixtures routed through the real
+  contracts) rejects it in the candidate plane -- untrusted source
+  tier, no authorizing chain -- and emits a rejection receipt (a
+  real `MemoryReducerDecision`). The trusted ledger's
+  `bundle_fingerprint` is byte-identical before and after the attack.
+
+Deterministic, no API keys, no network. Outputs a console table and
+a generated `report.md`. For the same governance run against a full
+synthetic NBFC corpus (30 emails, 5 policy documents, 2 poisoned
+documents, a supersession trap, and an Audit Pack export), see
+[`examples/arthashila_demo/build.py`](examples/arthashila_demo/build.py)
+-- it requires the demo dataset directory (`--dataset`) and answers
+the corpus's walkthrough question from the trusted ledger with every
+clause cited.
+
+## Audit packs
+
+The audit pack is the report you hand an auditor, a regulator, or a
+CFO. Where the hygiene report says what the bundle *looks like*, the
+audit pack says how every trusted entry *got there*: it walks each
+ledger entry's full authorization chain (entry → authorizing reducer
+decision → candidates → evidence spans → sources), collects every
+rejected candidate decision with its rationale, and renders the
+supersession changelog — all tied to the bundle's
+`bundle_fingerprint`. The default title is the promise: *"Every fact
+your AI relies on, who authorized it, and the evidence behind it."*
+
+```python
+from agent_memory_contracts import compute_audit_pack, audit_pack_to_markdown
+
+pack = compute_audit_pack(records, as_of="2026-06-30T00:00:00Z")
+print(pack.complete_chain_count, pack.incomplete_chain_count, pack.rejected_count)
+markdown = audit_pack_to_markdown(pack)
+```
+
+Broken chains are findings, not errors: a missing decision, a
+dangling candidate, or an unresolved span flags the entry
+`INCOMPLETE` (with exactly what is missing) instead of raising. The
+pack id is content-derived, so the same bundle and `as_of` reproduce
+the same pack — an attested pack can be re-verified later. From the
+shell:
+
+```bash
+python -m agent_memory_contracts audit bundle.jsonl
+python -m agent_memory_contracts audit bundle.jsonl --as-of 2026-06-30T00:00:00Z --json
+```
+
+## Runtime (reference implementation)
+
+The contracts say what a governed memory record *is*; the
+`agent_memory_contracts.runtime` package is a complete, stdlib-only
+reference implementation of how a runtime holds and moves them —
+sqlite3-backed, no new dependencies:
+
+- **`runtime.store.MemoryStore`** — six-plane persistence with
+  immutable payloads, insert-only edge tables, and SQL triggers
+  that make silent writes impossible at the schema level.
+  Supersession (and retraction) live in edge tables and are
+  materialized at read, so the append-only ledger still satisfies
+  the library's reciprocity validators — including time travel
+  (`active_entries(as_of=...)`: what was true on May 3rd).
+- **`runtime.gate.MemoryGate`** — the only write path. Idempotent,
+  server-verified ingestion (same payload = no-op; forged id =
+  structured `id_mismatch`), and one transactional `promote()`
+  that carries a reducer decision + its entries + its
+  supersessions as a single validated closure. There is no API
+  that writes a ledger entry outside it. Conflicts (double
+  promotion, double supersession) resolve first-commit-wins with
+  the winning decision id in the error.
+- **`runtime.anchors`** — a hash-chained audit anchor on every
+  committed batch. `verify_chain()` recomputes every anchor and
+  returns the first divergence (edited payload, deleted row,
+  reordered history); `verify_coverage()` flags any trusted row no
+  anchor accounts for.
+- **`runtime.grounding`** — deterministic, receipted ContextPack
+  builds (same memory + same request ⇒ byte-identical fingerprint)
+  and a cite-or-refuse `answer()`: every factual sentence carries
+  a `[Fi]` citation checked *mechanically*, and below-threshold
+  support returns a structured refusal with the unreviewed
+  candidates that might be relevant. No model calls — the
+  reference answerer is a deterministic template, so the whole
+  contract is testable.
+
+The five differentiator invariants are executable in
+[`tests/invariants/`](tests/invariants/) — no silent writes (fuzzed),
+full provenance (chain-walked), reciprocal supersession (raced),
+deterministic receipts (tamper-tested), grounded-or-refused
+(adversarially checked). To see the runtime run the full NBFC
+corpus end to end (poisons quarantined, 12.50% answered with
+citations from a receipted pack, audit pack emitted from store
+state, anchor chain verified):
+
+```bash
+PYTHONPATH=src python examples/arthashila_demo/build.py --runtime --dataset /path/to/05-demo-dataset
+```
+
+The runtime is the *semantics*, not the service: the product layer
+(Postgres backend behind `runtime.store.StorageBackend`, FastAPI,
+console, MCP wiring) is mapped ADR-by-ADR in
+[`docs/ROADMAP-to-product.md`](docs/ROADMAP-to-product.md).
 
 ## Bundle fingerprint
 
@@ -288,6 +455,10 @@ python -m agent_memory_contracts merge a.json b.json c.json --prefer last
 # Memory hygiene report.
 python -m agent_memory_contracts hygiene weekly.jsonl
 python -m agent_memory_contracts hygiene bundle.jsonl --from 2026-04-01 --to 2026-06-30 --json
+
+# Audit pack (authorization chains, rejections, supersessions).
+python -m agent_memory_contracts audit bundle.jsonl
+python -m agent_memory_contracts audit bundle.jsonl --as-of 2026-06-30T00:00:00Z --json
 
 # Misc.
 python -m agent_memory_contracts --help
