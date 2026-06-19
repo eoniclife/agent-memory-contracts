@@ -79,30 +79,43 @@ calls.
 `fastmcp` (from the optional `[mcp]` extra) and exposes
 the 3 names.
 
-## Tools exposed (3)
+## Tools exposed
 
-1. **`validate_bundle(bundle: dict) -> dict`**
-   Wraps the library's
-   `agent_memory_contracts.bundles.validate_bundle_dict` (or
-   equivalent). Returns a validation report.
+1. **`validate_records_against_schemas(bundle: dict) -> dict`**
+   Validates records against the library's JSON Schemas. This
+   is per-record schema validation, not whole-bundle integrity
+   validation.
 
-2. **`compile_context(bundle: dict, task: dict, policy: dict) -> dict`**
+2. **`validate_bundle_integrity(bundle: dict) -> dict`**
+   Runs schema validation plus cross-record validators for
+   candidates, ledgers, taste cards, state, and ContextPacks
+   where those records are present.
+
+3. **`evaluate_access_scope(bundle: dict, scope: dict) -> dict`**
+   Evaluates access using the client-requested scope capped by
+   the server's configured maximum privacy class.
+
+4. **`compile_context(bundle: dict, task: dict, policy: dict) -> dict`**
    Wraps `compile_context_pack`. Returns a dict form of the
    `ContextPack`.
 
-3. **`check_access(bundle: dict, scope: dict) -> dict`**
-   Wraps `check_access` + `scope_bundle`. Returns a
-   summary of decisions and the redacted bundle.
+5. **`validate_bundle(bundle: dict) -> dict`**
+   Compatibility alias for
+   `validate_records_against_schemas`.
 
-## Resources exposed (1 list + 24 schemas = 25)
+6. **`check_access(bundle: dict, scope: dict) -> dict`**
+   Shape-compatible alias for `evaluate_access_scope`; the
+   server's configured maximum privacy class is enforced.
+
+## Resources exposed (1 list + one resource per schema)
 
 1. **`agent-memory-contracts://schemas`**
    A directory resource: a list of available JSON
-   Schemas (the 24 schema files at "1.0.0").
+   Schemas.
 
 2. **`agent-memory-contracts://schemas/{name}`**
    For each schema name, a resource containing the
-   schema's JSON content. 24 resources total.
+   schema's JSON content.
 
 ## Dependencies
 
@@ -191,13 +204,14 @@ client config (e.g., `claude_desktop_config.json`):
     Using FastMCP gives us a 200-LOC server instead of
     a 2000-LOC one.
 
-11. **The server exposes 3 tools, not the full library
-    surface.** 3 tools = `validate_bundle`,
-    `compile_context`, `check_access`. Other functions
-    (fingerprint, diff, merge, hygiene) are
-    client-side operations; they don't need an MCP
-    round-trip. A user with full bundle access can run
-    them locally.
+11. **The server exposes a small tool surface, not the
+    full library surface.** The current surface includes
+    precise schema-validation, bundle-integrity, access-
+    scope, and ContextPack compilation tools, plus
+    compatibility/shape-compatible aliases. Other functions
+    (fingerprint, diff, merge, hygiene) are client-side operations; they
+    don't need an MCP round-trip. A user with full bundle
+    access can run them locally.
 
 12. **The server does not implement a "store" tool.**
     MCP has a `Store` resource type for read/write
