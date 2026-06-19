@@ -93,6 +93,12 @@ class AccessDecision:
     record_id: str
     action: Literal["allow", "redact", "drop"]
     reason: str  # human-readable explanation
+    # v1.3.0 additive fields:
+    reason_code: str = field(default="unspecified", compare=False)
+    privacy_class: str | None = field(default=None, compare=False)
+    max_privacy_class: str | None = field(default=None, compare=False)
+    record_type: str | None = field(default=None, compare=False)
+    allowed_record_types: tuple[str, ...] | None = field(default=None, compare=False)
 ```
 
 In v0.9.0, the `redact` action is reserved but never returned
@@ -113,6 +119,11 @@ a `privacy_class` field is treated as `internal` (the library's
 default). A record without a discriminator field that
 `allowed_record_types` can match is allowed (record-type
 filtering is opt-in, not opt-out).
+
+Dict discriminator values are normalized to stable schema-style
+record types. For example, `ledger_type="fact"` is surfaced as
+`fact_ledger_entry`, and `candidate_type="claim"` is surfaced as
+`candidate_claim`.
 
 #### `scope_bundle(bundle, scope) -> tuple[Bundle, list[AccessDecision]]`
 
@@ -140,10 +151,15 @@ class AccessSummary:
     dropped: int
     by_privacy_class: Mapping[str, int]  # count per privacy_class for records in the bundle
     by_action: Mapping[str, int]
+    by_reason_code: Mapping[str, int] = field(default_factory=dict, compare=False)
 ```
 
 Useful for product dashboards ("you tried to share 100 records;
 62 are allowed, 0 will be redacted, 38 will be dropped").
+The v1.3.0 structured metadata fields are excluded from dataclass
+equality comparisons, so old-style expected values based on
+`record_id`, `action`, `reason`, and the six original summary fields
+remain compatible.
 
 ---
 
@@ -518,7 +534,14 @@ mandate. Recorded here so the spec stays the source of truth for
 - **Order preservation in `scope_bundle`:** the filtered
   bundle preserves the input order; the decisions list
   matches the input order 1:1.
-- **`AccessDecision.reason` is human-readable English.** No
-  structured codes; the reason is for product UIs and audit
-  logs, not for programmatic branching. Programmatic branching
-  uses `decision.action == "allow"`.
+- **`AccessDecision.reason` remains human-readable English.**
+  v1.3.0 added structured metadata (`reason_code`, privacy class,
+  max privacy class, record type, and allowed record types) so product
+  code no longer needs to parse the reason string. Programmatic
+  branching uses `decision.action` and `decision.reason_code`. The
+  structured metadata is excluded from dataclass equality/hash
+  comparison to preserve old expected-value assertions.
+- **MCP access evaluation uses bundle-plane fallback for record type.**
+  Plane-organized dict records that omit their own discriminator are still
+  evaluated against `allowed_record_types` using the plane's stable record
+  type, so whitelists cannot be bypassed by under-specified MCP input.

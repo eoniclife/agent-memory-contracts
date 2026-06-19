@@ -196,6 +196,162 @@ class TestAccessScopeHelper(unittest.TestCase):
         )
         self.assertEqual(result["summary"]["dropped"], 1)
         self.assertIn("fail_closed_unknown_privacy", result["decisions"][0]["reason"])
+        self.assertEqual(
+            result["decisions"][0]["reason_code"],
+            "unknown_privacy_class",
+        )
+        self.assertEqual(result["decisions"][0]["privacy_class"], "classified")
+        self.assertEqual(
+            result["summary"]["by_reason_code"],
+            {"unknown_privacy_class": 1},
+        )
+
+    def test_unknown_record_privacy_decision_includes_scope_metadata(self) -> None:
+        result = _evaluate_access_scope(
+            {"source_records": [{"id": "x", "privacy_class": "classified"}]},
+            {
+                "max_privacy_class": "highly_sensitive",
+                "allowed_record_types": ["source_record"],
+            },
+            MCPConfig(maximum_privacy_class="highly_sensitive"),
+        )
+        decision = result["decisions"][0]
+        self.assertEqual(decision["record_type"], "source_record")
+        self.assertEqual(decision["allowed_record_types"], ["source_record"])
+
+    def test_plane_record_type_fallback_enforces_whitelist(self) -> None:
+        result = _evaluate_access_scope(
+            {"source_records": [{"id": "x", "privacy_class": "public"}]},
+            {
+                "max_privacy_class": "highly_sensitive",
+                "allowed_record_types": ["fact_ledger_entry"],
+            },
+            MCPConfig(maximum_privacy_class="highly_sensitive"),
+        )
+        self.assertEqual(result["allowed_records"], [])
+        decision = result["decisions"][0]
+        self.assertEqual(decision["action"], "drop")
+        self.assertEqual(decision["reason_code"], "record_type_not_allowed")
+        self.assertEqual(decision["record_type"], "source_record")
+        self.assertEqual(decision["allowed_record_types"], ["fact_ledger_entry"])
+
+    def test_plane_record_type_fallback_allows_matching_whitelist(self) -> None:
+        result = _evaluate_access_scope(
+            {"source_records": [{"id": "x", "privacy_class": "public"}]},
+            {
+                "max_privacy_class": "highly_sensitive",
+                "allowed_record_types": ["source_record"],
+            },
+            MCPConfig(maximum_privacy_class="highly_sensitive"),
+        )
+        self.assertEqual(len(result["allowed_records"]), 1)
+        decision = result["decisions"][0]
+        self.assertEqual(decision["action"], "allow")
+        self.assertEqual(decision["reason_code"], "privacy_allowed")
+        self.assertEqual(decision["record_type"], "source_record")
+        self.assertEqual(decision["allowed_record_types"], ["source_record"])
+
+    def test_legacy_ledger_alias_allows_mcp_plane_record(self) -> None:
+        result = _evaluate_access_scope(
+            {
+                "fact_ledger_entries": [
+                    {
+                        "id": "fact_x",
+                        "privacy_class": "internal",
+                        "ledger_type": "fact",
+                    }
+                ]
+            },
+            {
+                "max_privacy_class": "highly_sensitive",
+                "allowed_record_types": ["fact"],
+            },
+            MCPConfig(maximum_privacy_class="highly_sensitive"),
+        )
+        self.assertEqual(len(result["allowed_records"]), 1)
+        decision = result["decisions"][0]
+        self.assertEqual(decision["action"], "allow")
+        self.assertEqual(decision["record_type"], "fact_ledger_entry")
+        self.assertEqual(decision["allowed_record_types"], ["fact"])
+
+    def test_legacy_candidate_alias_allows_mcp_plane_record(self) -> None:
+        result = _evaluate_access_scope(
+            {
+                "candidate_claims": [
+                    {
+                        "id": "cand_x",
+                        "privacy_class": "internal",
+                        "candidate_type": "claim",
+                    }
+                ]
+            },
+            {
+                "max_privacy_class": "highly_sensitive",
+                "allowed_record_types": ["claim"],
+            },
+            MCPConfig(maximum_privacy_class="highly_sensitive"),
+        )
+        self.assertEqual(len(result["allowed_records"]), 1)
+        decision = result["decisions"][0]
+        self.assertEqual(decision["action"], "allow")
+        self.assertEqual(decision["record_type"], "candidate_claim")
+        self.assertEqual(decision["allowed_record_types"], ["claim"])
+
+    def test_plane_record_type_fallback_refines_empty_discriminator(self) -> None:
+        result = _evaluate_access_scope(
+            {"fact_ledger_entries": [{"id": "fact_x", "ledger_type": ""}]},
+            {
+                "max_privacy_class": "highly_sensitive",
+                "allowed_record_types": ["fact_ledger_entry"],
+            },
+            MCPConfig(maximum_privacy_class="highly_sensitive"),
+        )
+        self.assertEqual(len(result["allowed_records"]), 1)
+        self.assertEqual(result["decisions"][0]["record_type"], "fact_ledger_entry")
+
+    def test_plane_record_type_is_authoritative_for_mcp_records(self) -> None:
+        result = _evaluate_access_scope(
+            {
+                "source_records": [
+                    {
+                        "id": "x",
+                        "privacy_class": "public",
+                        "ledger_type": "fact",
+                    }
+                ]
+            },
+            {
+                "max_privacy_class": "highly_sensitive",
+                "allowed_record_types": ["fact_ledger_entry"],
+            },
+            MCPConfig(maximum_privacy_class="highly_sensitive"),
+        )
+        self.assertEqual(result["allowed_records"], [])
+        decision = result["decisions"][0]
+        self.assertEqual(decision["reason_code"], "record_type_not_allowed")
+        self.assertEqual(decision["record_type"], "source_record")
+
+    def test_fail_closed_uses_plane_record_type_metadata(self) -> None:
+        result = _evaluate_access_scope(
+            {
+                "fact_ledger_entries": [
+                    {
+                        "id": "fact_x",
+                        "privacy_class": "classified",
+                        "ledger_type": "fact",
+                    }
+                ]
+            },
+            {
+                "max_privacy_class": "highly_sensitive",
+                "allowed_record_types": ["fact_ledger_entry"],
+            },
+            MCPConfig(maximum_privacy_class="highly_sensitive"),
+        )
+        decision = result["decisions"][0]
+        self.assertEqual(decision["reason_code"], "unknown_privacy_class")
+        self.assertEqual(decision["record_type"], "fact_ledger_entry")
+        self.assertEqual(decision["allowed_record_types"], ["fact_ledger_entry"])
 
     def test_malformed_allowed_record_types_fails_closed(self) -> None:
         with self.assertRaises(ValueError):

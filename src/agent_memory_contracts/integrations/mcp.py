@@ -46,7 +46,7 @@ from __future__ import annotations
 import json
 import sys
 import warnings
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Literal
 
@@ -84,8 +84,11 @@ from agent_memory_contracts import (
     validate_ledger_bundle,
     validate_state_bundle,
     validate_taste_bundle,
-    scope_bundle,
     summarize_access,
+)
+from agent_memory_contracts.access import (
+    _record_type_allowed as _access_record_type_allowed,
+    _record_type_string as _access_record_type_string,
 )
 
 
@@ -382,9 +385,11 @@ def _validate_bundle_integrity(bundle: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _records_to_iter(bundle: dict[str, Any]) -> list[dict[str, Any]]:
-    """Flatten a bundle dict into a single list of records."""
-    records: list[dict[str, Any]] = []
+def _records_to_iter_with_types(
+    bundle: dict[str, Any],
+) -> list[tuple[dict[str, Any], str]]:
+    """Flatten a bundle dict into ``(record, plane_type)`` pairs."""
+    records: list[tuple[dict[str, Any], str]] = []
     for plane in _PLANE_TO_SCHEMA:
         plane_records = bundle.get(plane, [])
         if not isinstance(plane_records, list):
@@ -398,8 +403,13 @@ def _records_to_iter(bundle: dict[str, Any]) -> list[dict[str, Any]]:
                     f"plane {plane!r} contains non-object record "
                     f"(got {type(record).__name__})"
                 )
-            records.append(record)
+            records.append((record, _PLANE_TO_SCHEMA[plane]))
     return records
+
+
+def _records_to_iter(bundle: dict[str, Any]) -> list[dict[str, Any]]:
+    """Flatten a bundle dict into a single list of records."""
+    return [record for record, _record_type in _records_to_iter_with_types(bundle)]
 
 
 def _context_pack_to_dict(cp: ContextPack) -> dict[str, Any]:
@@ -448,11 +458,100 @@ def _record_id_for_mcp(record: Any) -> str:
     return str(getattr(record, "id", "<missing>"))
 
 
-def _decision_to_dict(decision: AccessDecision) -> dict[str, str]:
+def _record_privacy_for_mcp(record: Any) -> str | None:
+    if isinstance(record, dict):
+        value = record.get("privacy_class")
+    else:
+        value = getattr(record, "privacy_class", None)
+    return value if isinstance(value, str) else None
+
+
+def _record_type_for_mcp(
+    record: Any,
+    plane_record_type: str | None = None,
+) -> str | None:
+    if plane_record_type is not None:
+        return plane_record_type
+    record_type = _access_record_type_string(record)
+    return record_type or None
+
+
+def _allowed_record_types_tuple(scope: BundleScope) -> tuple[str, ...] | None:
+    if scope.allowed_record_types is None:
+        return None
+    return tuple(sorted(scope.allowed_record_types))
+
+
+def _check_access_for_mcp(
+    record: dict[str, Any],
+    scope: BundleScope,
+    plane_record_type: str,
+) -> AccessDecision:
+    """Run access checks with MCP bundle-plane record type fallback."""
+    decision = check_access(record, scope)
+    record_type = _record_type_for_mcp(record, plane_record_type)
+    if record_type == decision.record_type:
+        return decision
+
+    allowed_record_types = _allowed_record_types_tuple(scope)
+    if decision.reason_code == "privacy_exceeds_scope":
+        return replace(
+            decision,
+            record_type=record_type,
+            allowed_record_types=allowed_record_types,
+        )
+
+    if scope.allowed_record_types is not None and record_type is not None:
+        if not _access_record_type_allowed(record_type, scope.allowed_record_types):
+            return AccessDecision(
+                record_id=decision.record_id,
+                action="drop",
+                reason=(
+                    f"record_type={record_type} not in "
+                    f"allowed_record_types={sorted(scope.allowed_record_types)}"
+                ),
+                reason_code="record_type_not_allowed",
+                privacy_class=decision.privacy_class,
+                max_privacy_class=decision.max_privacy_class,
+                record_type=record_type,
+                allowed_record_types=allowed_record_types,
+            )
+        if decision.reason_code == "record_type_not_allowed":
+            return AccessDecision(
+                record_id=decision.record_id,
+                action="allow",
+                reason=(
+                    f"privacy_class={decision.privacy_class} "
+                    f"<= max={scope.max_privacy_class}"
+                ),
+                reason_code="privacy_allowed",
+                privacy_class=decision.privacy_class,
+                max_privacy_class=decision.max_privacy_class,
+                record_type=record_type,
+                allowed_record_types=allowed_record_types,
+            )
+
+    return replace(
+        decision,
+        record_type=record_type,
+        allowed_record_types=allowed_record_types,
+    )
+
+
+def _decision_to_dict(decision: AccessDecision) -> dict[str, Any]:
     return {
         "record_id": decision.record_id,
         "action": decision.action,
         "reason": decision.reason,
+        "reason_code": decision.reason_code,
+        "privacy_class": decision.privacy_class,
+        "max_privacy_class": decision.max_privacy_class,
+        "record_type": decision.record_type,
+        "allowed_record_types": (
+            list(decision.allowed_record_types)
+            if decision.allowed_record_types is not None
+            else None
+        ),
     }
 
 
@@ -462,20 +561,32 @@ def _evaluate_access_scope(
     config: MCPConfig,
 ) -> dict[str, Any]:
     scope_obj = _scope_from_dict(scope, config)
-    records = _records_to_iter(bundle)
+    typed_records = _records_to_iter_with_types(bundle)
     if not config.fail_closed_unknown_privacy:
-        allowed, decisions = scope_bundle(records, scope_obj)
+        allowed = []
+        decisions = []
+        for record, plane_record_type in typed_records:
+            decision = _check_access_for_mcp(record, scope_obj, plane_record_type)
+            decisions.append(decision)
+            if decision.action == "allow":
+                allowed.append(record)
     else:
         allowed = []
         decisions = []
-        for record in records:
+        allowed_record_types = _allowed_record_types_tuple(scope_obj)
+        for record, plane_record_type in typed_records:
             try:
-                decision = check_access(record, scope_obj)
+                decision = _check_access_for_mcp(record, scope_obj, plane_record_type)
             except ValueError as exc:
                 decision = AccessDecision(
                     record_id=_record_id_for_mcp(record),
                     action="drop",
                     reason=f"fail_closed_unknown_privacy: {exc}",
+                    reason_code="unknown_privacy_class",
+                    privacy_class=_record_privacy_for_mcp(record),
+                    max_privacy_class=scope_obj.max_privacy_class,
+                    record_type=_record_type_for_mcp(record, plane_record_type),
+                    allowed_record_types=allowed_record_types,
                 )
             decisions.append(decision)
             if decision.action == "allow":
@@ -499,6 +610,9 @@ def _evaluate_access_scope(
             "allowed": summary.allowed,
             "redacted": summary.redacted,
             "dropped": summary.dropped,
+            "by_privacy_class": dict(summary.by_privacy_class),
+            "by_action": dict(summary.by_action),
+            "by_reason_code": dict(summary.by_reason_code),
         },
     }
 

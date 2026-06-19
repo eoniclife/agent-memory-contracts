@@ -143,6 +143,10 @@ class TestCheckAccess(unittest.TestCase):
         scope = team_scope()
         d = check_access(fact, scope)
         self.assertEqual(d.action, "allow")
+        self.assertEqual(d.reason_code, "privacy_allowed")
+        self.assertEqual(d.privacy_class, "internal")
+        self.assertEqual(d.max_privacy_class, "internal")
+        self.assertEqual(d.record_type, "fact_ledger_entry")
         # The fixture's source uses privacy_class="internal";
         # the fact's privacy_class defaults to "internal" too.
         self.assertIn("internal", d.reason)
@@ -152,6 +156,9 @@ class TestCheckAccess(unittest.TestCase):
         scope = team_scope()
         d = check_access(src, scope)
         self.assertEqual(d.action, "drop")
+        self.assertEqual(d.reason_code, "privacy_exceeds_scope")
+        self.assertEqual(d.privacy_class, "highly_sensitive")
+        self.assertEqual(d.max_privacy_class, "internal")
         self.assertIn("highly_sensitive", d.reason)
         self.assertIn("internal", d.reason)
 
@@ -206,6 +213,9 @@ class TestCheckAccess(unittest.TestCase):
         # so the privacy class check passes. The record type
         # check then drops it.
         self.assertEqual(d.action, "drop")
+        self.assertEqual(d.reason_code, "record_type_not_allowed")
+        self.assertEqual(d.record_type, "fact_ledger_entry")
+        self.assertEqual(d.allowed_record_types, ("source_record",))
         self.assertIn("fact_ledger_entry", d.reason)
 
     def test_dict_record(self) -> None:
@@ -218,11 +228,91 @@ class TestCheckAccess(unittest.TestCase):
         d = check_access(record, scope)
         self.assertEqual(d.action, "allow")
 
+    def test_dict_ledger_record_uses_stable_record_type(self) -> None:
+        record = {
+            "id": "fact_dict_1",
+            "schema_version": "1.0.0",
+            "privacy_class": "internal",
+            "ledger_type": "fact",
+        }
+        allow_scope = BundleScope(
+            max_privacy_class="internal",
+            allowed_record_types=frozenset({"fact_ledger_entry"}),
+            name="facts-only",
+        )
+        allow_decision = check_access(record, allow_scope)
+        self.assertEqual(allow_decision.action, "allow")
+        self.assertEqual(allow_decision.record_type, "fact_ledger_entry")
+
+        legacy_alias_scope = BundleScope(
+            max_privacy_class="internal",
+            allowed_record_types=frozenset({"fact"}),
+            name="legacy-facts-only",
+        )
+        legacy_alias_decision = check_access(record, legacy_alias_scope)
+        self.assertEqual(legacy_alias_decision.action, "allow")
+        self.assertEqual(legacy_alias_decision.record_type, "fact_ledger_entry")
+        self.assertEqual(legacy_alias_decision.allowed_record_types, ("fact",))
+
+        drop_scope = BundleScope(
+            max_privacy_class="internal",
+            allowed_record_types=frozenset({"source_record"}),
+            name="sources-only",
+        )
+        drop_decision = check_access(record, drop_scope)
+        self.assertEqual(drop_decision.action, "drop")
+        self.assertEqual(drop_decision.reason_code, "record_type_not_allowed")
+        self.assertEqual(drop_decision.record_type, "fact_ledger_entry")
+
+    def test_dict_candidate_record_uses_stable_record_type(self) -> None:
+        record = {
+            "id": "cand_dict_1",
+            "schema_version": "1.0.0",
+            "privacy_class": "internal",
+            "candidate_type": "claim",
+        }
+        scope = BundleScope(
+            max_privacy_class="internal",
+            allowed_record_types=frozenset({"candidate_claim"}),
+            name="claims-only",
+        )
+        d = check_access(record, scope)
+        self.assertEqual(d.action, "allow")
+        self.assertEqual(d.record_type, "candidate_claim")
+
+        legacy_alias_scope = BundleScope(
+            max_privacy_class="internal",
+            allowed_record_types=frozenset({"claim"}),
+            name="legacy-claims-only",
+        )
+        legacy_alias_decision = check_access(record, legacy_alias_scope)
+        self.assertEqual(legacy_alias_decision.action, "allow")
+        self.assertEqual(legacy_alias_decision.record_type, "candidate_claim")
+        self.assertEqual(legacy_alias_decision.allowed_record_types, ("claim",))
+
     def test_decision_is_access_decision(self) -> None:
         src = _build_source("public", "1")
         scope = team_scope()
         d = check_access(src, scope)
         self.assertIsInstance(d, AccessDecision)
+
+    def test_legacy_constructor_still_works(self) -> None:
+        d = AccessDecision("x", "allow", "privacy_class=public <= max=internal")
+        self.assertEqual(d.reason_code, "unspecified")
+        self.assertIsNone(d.privacy_class)
+
+    def test_structured_metadata_does_not_change_decision_equality(self) -> None:
+        src = _build_source("public", "1")
+        scope = team_scope()
+        d = check_access(src, scope)
+        self.assertEqual(
+            d,
+            AccessDecision(d.record_id, d.action, d.reason),
+        )
+        self.assertEqual(
+            hash(d),
+            hash(AccessDecision(d.record_id, d.action, d.reason)),
+        )
 
 
 class TestScopeBundle(unittest.TestCase):
@@ -290,6 +380,10 @@ class TestSummarizeAccess(unittest.TestCase):
         self.assertEqual(summary.redacted, 0)
         self.assertEqual(summary.dropped, 3)
         self.assertEqual(summary.by_action, {"allow": 2, "drop": 3})
+        self.assertEqual(
+            summary.by_reason_code,
+            {"privacy_allowed": 2, "privacy_exceeds_scope": 3},
+        )
 
     def test_summary_empty(self) -> None:
         summary = summarize_access([])
@@ -297,6 +391,7 @@ class TestSummarizeAccess(unittest.TestCase):
         self.assertEqual(summary.allowed, 0)
         self.assertEqual(summary.dropped, 0)
         self.assertEqual(summary.by_action, {})
+        self.assertEqual(summary.by_reason_code, {})
 
     def test_summary_by_privacy_class(self) -> None:
         bundle = _build_all_classes_bundle()
@@ -307,6 +402,47 @@ class TestSummarizeAccess(unittest.TestCase):
         self.assertEqual(len(summary.by_privacy_class), 5)
         self.assertEqual(summary.by_privacy_class["public"], 1)
         self.assertEqual(summary.by_privacy_class["highly_sensitive"], 1)
+
+    def test_summary_skips_type_filtered_records_by_privacy(self) -> None:
+        from tests.test_citations import _build_fact_ledger_entry
+        src, span = build_source_and_span()
+        fact = _build_fact_ledger_entry(src.id, [span.id])
+        scope = BundleScope(
+            max_privacy_class="highly_sensitive",
+            allowed_record_types=frozenset({"source_record"}),
+            name="sources-only",
+        )
+        summary = summarize_access([check_access(fact, scope)])
+        self.assertEqual(summary.by_privacy_class, {})
+        self.assertEqual(summary.by_reason_code, {"record_type_not_allowed": 1})
+
+    def test_summary_falls_back_to_legacy_reason_parser(self) -> None:
+        summary = summarize_access([
+            AccessDecision(
+                "x",
+                "allow",
+                "privacy_class=public <= max=internal",
+            )
+        ])
+        self.assertEqual(summary.by_privacy_class, {"public": 1})
+        self.assertEqual(summary.by_reason_code, {"unspecified": 1})
+
+    def test_reason_code_summary_does_not_change_summary_equality(self) -> None:
+        bundle = _build_all_classes_bundle()
+        scope = team_scope()
+        _, decisions = scope_bundle(bundle, scope)
+        summary = summarize_access(decisions)
+        self.assertEqual(
+            summary,
+            AccessSummary(
+                summary.total,
+                summary.allowed,
+                summary.redacted,
+                summary.dropped,
+                summary.by_privacy_class,
+                summary.by_action,
+            ),
+        )
 
 
 class TestDataclassRecordAccess(unittest.TestCase):

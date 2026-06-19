@@ -164,8 +164,8 @@ audit script `scripts/audit_public_api.py` walks
 | --- | --- | --- |
 | `PRIVACY_CLASS_ORDER` | `access` | Linear order of privacy classes |
 | `BundleScope` | `access` | A scope (max privacy, record-type filter, name) |
-| `AccessDecision` | `access` | Per-record allow/drop/redact decision |
-| `AccessSummary` | `access` | Aggregate counts from decisions |
+| `AccessDecision` | `access` | Per-record allow/drop/redact decision with structured reason metadata |
+| `AccessSummary` | `access` | Aggregate counts from decisions, actions, privacy classes, and reason codes |
 | `check_access` | `access` | Per-record scope check |
 | `scope_bundle` | `access` | Whole-bundle filter |
 | `summarize_access` | `access` | Aggregate decisions into a summary |
@@ -173,6 +173,12 @@ audit script `scripts/audit_public_api.py` walks
 | `team_scope` | `access` | Scope factory: up to internal |
 | `customer_scope` | `access` | Scope factory: up to private |
 | `private_scope` | `access` | Scope factory: all records |
+
+The v1.3.0 structured metadata on `AccessDecision` and
+`AccessSummary.by_reason_code` is additive and serializable, but does
+not participate in dataclass equality/hash comparison. Existing
+expected values that compare only the original constructor fields remain
+compatible.
 
 ### Embedding input (v1.0.0-alpha.1)
 
@@ -232,7 +238,8 @@ entry point below. MCP tool names are integration surface:
 and `evaluate_access_scope` are the precise tool names;
 `validate_bundle` remains a compatibility alias, while
 `check_access` is shape-compatible with the old response but now
-also enforces the server's configured maximum privacy class.
+also enforces the server's configured maximum privacy class and
+emits structured access-decision fields.
 
 | Name | Module | Description |
 | --- | --- | --- |
