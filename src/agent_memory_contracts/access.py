@@ -260,6 +260,22 @@ def _record_type_string(record: Any) -> str:
     return ""
 
 
+def _record_type_aliases(record_type: str) -> frozenset[str]:
+    """Return accepted legacy aliases for a stable record type."""
+    aliases = {record_type}
+    if record_type.startswith("candidate_") and len(record_type) > len("candidate_"):
+        aliases.add(record_type[len("candidate_") :])
+    suffix = "_ledger_entry"
+    if record_type.endswith(suffix) and len(record_type) > len(suffix):
+        aliases.add(record_type[: -len(suffix)])
+    return frozenset(aliases)
+
+
+def _record_type_allowed(record_type: str, allowed_record_types: frozenset[str]) -> bool:
+    """Return whether ``record_type`` matches stable names or legacy aliases."""
+    return bool(_record_type_aliases(record_type) & allowed_record_types)
+
+
 def check_access(record: Any, scope: BundleScope) -> AccessDecision:
     """Check whether ``record`` is allowed at ``scope``.
 
@@ -313,7 +329,7 @@ def check_access(record: Any, scope: BundleScope) -> AccessDecision:
         )
 
     if scope.allowed_record_types is not None:
-        if rt and rt not in scope.allowed_record_types:
+        if rt and not _record_type_allowed(rt, scope.allowed_record_types):
             return AccessDecision(
                 record_id=rid,
                 action="drop",

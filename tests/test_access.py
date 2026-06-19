@@ -244,6 +244,16 @@ class TestCheckAccess(unittest.TestCase):
         self.assertEqual(allow_decision.action, "allow")
         self.assertEqual(allow_decision.record_type, "fact_ledger_entry")
 
+        legacy_alias_scope = BundleScope(
+            max_privacy_class="internal",
+            allowed_record_types=frozenset({"fact"}),
+            name="legacy-facts-only",
+        )
+        legacy_alias_decision = check_access(record, legacy_alias_scope)
+        self.assertEqual(legacy_alias_decision.action, "allow")
+        self.assertEqual(legacy_alias_decision.record_type, "fact_ledger_entry")
+        self.assertEqual(legacy_alias_decision.allowed_record_types, ("fact",))
+
         drop_scope = BundleScope(
             max_privacy_class="internal",
             allowed_record_types=frozenset({"source_record"}),
@@ -269,6 +279,16 @@ class TestCheckAccess(unittest.TestCase):
         d = check_access(record, scope)
         self.assertEqual(d.action, "allow")
         self.assertEqual(d.record_type, "candidate_claim")
+
+        legacy_alias_scope = BundleScope(
+            max_privacy_class="internal",
+            allowed_record_types=frozenset({"claim"}),
+            name="legacy-claims-only",
+        )
+        legacy_alias_decision = check_access(record, legacy_alias_scope)
+        self.assertEqual(legacy_alias_decision.action, "allow")
+        self.assertEqual(legacy_alias_decision.record_type, "candidate_claim")
+        self.assertEqual(legacy_alias_decision.allowed_record_types, ("claim",))
 
     def test_decision_is_access_decision(self) -> None:
         src = _build_source("public", "1")

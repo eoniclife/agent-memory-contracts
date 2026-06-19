@@ -87,6 +87,7 @@ from agent_memory_contracts import (
     summarize_access,
 )
 from agent_memory_contracts.access import (
+    _record_type_allowed as _access_record_type_allowed,
     _record_type_string as _access_record_type_string,
 )
 
@@ -501,7 +502,7 @@ def _check_access_for_mcp(
         )
 
     if scope.allowed_record_types is not None and record_type is not None:
-        if record_type not in scope.allowed_record_types:
+        if not _access_record_type_allowed(record_type, scope.allowed_record_types):
             return AccessDecision(
                 record_id=decision.record_id,
                 action="drop",

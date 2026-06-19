@@ -30,6 +30,9 @@ Changes:
   new privacy-class buckets;
 - normalize dict discriminator values to stable record-type names such as
   `fact_ledger_entry` and `candidate_claim`;
+- preserve legacy allowlist aliases for candidate and ledger discriminator
+  values such as `fact` and `claim`, while continuing to emit canonical
+  `record_type` metadata;
 - serialize the structured fields from MCP `evaluate_access_scope`;
 - use MCP bundle-plane names as the authoritative record type for
   plane-organized input, so payload discriminator fields cannot override the
@@ -83,6 +86,9 @@ Stable `record_type` metadata uses schema-style names: for example
 `ledger_type="fact"` becomes `fact_ledger_entry`, and
 `candidate_type="claim"` becomes `candidate_claim`. MCP access evaluation also
 uses the bundle plane as the authoritative type for plane-organized records.
+For compatibility, `allowed_record_types` accepts both those canonical names and
+legacy discriminator aliases such as `fact`, `preference`, `decision`, `claim`,
+`task`, and `taste_signal`; emitted decision metadata remains canonical.
 
 Record-type-only drops are intentionally excluded from
 `AccessSummary.by_privacy_class`. They are surfaced in

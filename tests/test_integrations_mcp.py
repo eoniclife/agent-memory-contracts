@@ -251,6 +251,52 @@ class TestAccessScopeHelper(unittest.TestCase):
         self.assertEqual(decision["record_type"], "source_record")
         self.assertEqual(decision["allowed_record_types"], ["source_record"])
 
+    def test_legacy_ledger_alias_allows_mcp_plane_record(self) -> None:
+        result = _evaluate_access_scope(
+            {
+                "fact_ledger_entries": [
+                    {
+                        "id": "fact_x",
+                        "privacy_class": "internal",
+                        "ledger_type": "fact",
+                    }
+                ]
+            },
+            {
+                "max_privacy_class": "highly_sensitive",
+                "allowed_record_types": ["fact"],
+            },
+            MCPConfig(maximum_privacy_class="highly_sensitive"),
+        )
+        self.assertEqual(len(result["allowed_records"]), 1)
+        decision = result["decisions"][0]
+        self.assertEqual(decision["action"], "allow")
+        self.assertEqual(decision["record_type"], "fact_ledger_entry")
+        self.assertEqual(decision["allowed_record_types"], ["fact"])
+
+    def test_legacy_candidate_alias_allows_mcp_plane_record(self) -> None:
+        result = _evaluate_access_scope(
+            {
+                "candidate_claims": [
+                    {
+                        "id": "cand_x",
+                        "privacy_class": "internal",
+                        "candidate_type": "claim",
+                    }
+                ]
+            },
+            {
+                "max_privacy_class": "highly_sensitive",
+                "allowed_record_types": ["claim"],
+            },
+            MCPConfig(maximum_privacy_class="highly_sensitive"),
+        )
+        self.assertEqual(len(result["allowed_records"]), 1)
+        decision = result["decisions"][0]
+        self.assertEqual(decision["action"], "allow")
+        self.assertEqual(decision["record_type"], "candidate_claim")
+        self.assertEqual(decision["allowed_record_types"], ["claim"])
+
     def test_plane_record_type_fallback_refines_empty_discriminator(self) -> None:
         result = _evaluate_access_scope(
             {"fact_ledger_entries": [{"id": "fact_x", "ledger_type": ""}]},
