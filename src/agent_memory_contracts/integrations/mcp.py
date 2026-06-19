@@ -87,6 +87,9 @@ from agent_memory_contracts import (
     scope_bundle,
     summarize_access,
 )
+from agent_memory_contracts.access import (
+    _record_type_string as _access_record_type_string,
+)
 
 
 TransportStr = Literal["stdio", "http"]
@@ -382,9 +385,11 @@ def _validate_bundle_integrity(bundle: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _records_to_iter(bundle: dict[str, Any]) -> list[dict[str, Any]]:
-    """Flatten a bundle dict into a single list of records."""
-    records: list[dict[str, Any]] = []
+def _records_to_iter_with_types(
+    bundle: dict[str, Any],
+) -> list[tuple[dict[str, Any], str]]:
+    """Flatten a bundle dict into ``(record, plane_type)`` pairs."""
+    records: list[tuple[dict[str, Any], str]] = []
     for plane in _PLANE_TO_SCHEMA:
         plane_records = bundle.get(plane, [])
         if not isinstance(plane_records, list):
@@ -398,8 +403,13 @@ def _records_to_iter(bundle: dict[str, Any]) -> list[dict[str, Any]]:
                     f"plane {plane!r} contains non-object record "
                     f"(got {type(record).__name__})"
                 )
-            records.append(record)
+            records.append((record, _PLANE_TO_SCHEMA[plane]))
     return records
+
+
+def _records_to_iter(bundle: dict[str, Any]) -> list[dict[str, Any]]:
+    """Flatten a bundle dict into a single list of records."""
+    return [record for record, _record_type in _records_to_iter_with_types(bundle)]
 
 
 def _context_pack_to_dict(cp: ContextPack) -> dict[str, Any]:
@@ -456,6 +466,16 @@ def _record_privacy_for_mcp(record: Any) -> str | None:
     return value if isinstance(value, str) else None
 
 
+def _record_type_for_mcp(
+    record: Any,
+    plane_record_type: str | None = None,
+) -> str | None:
+    record_type = _access_record_type_string(record)
+    if record_type:
+        return record_type
+    return plane_record_type
+
+
 def _decision_to_dict(decision: AccessDecision) -> dict[str, Any]:
     return {
         "record_id": decision.record_id,
@@ -479,13 +499,19 @@ def _evaluate_access_scope(
     config: MCPConfig,
 ) -> dict[str, Any]:
     scope_obj = _scope_from_dict(scope, config)
-    records = _records_to_iter(bundle)
+    typed_records = _records_to_iter_with_types(bundle)
+    records = [record for record, _record_type in typed_records]
     if not config.fail_closed_unknown_privacy:
         allowed, decisions = scope_bundle(records, scope_obj)
     else:
         allowed = []
         decisions = []
-        for record in records:
+        allowed_record_types = (
+            tuple(sorted(scope_obj.allowed_record_types))
+            if scope_obj.allowed_record_types is not None
+            else None
+        )
+        for record, plane_record_type in typed_records:
             try:
                 decision = check_access(record, scope_obj)
             except ValueError as exc:
@@ -496,6 +522,8 @@ def _evaluate_access_scope(
                     reason_code="unknown_privacy_class",
                     privacy_class=_record_privacy_for_mcp(record),
                     max_privacy_class=scope_obj.max_privacy_class,
+                    record_type=_record_type_for_mcp(record, plane_record_type),
+                    allowed_record_types=allowed_record_types,
                 )
             decisions.append(decision)
             if decision.action == "allow":

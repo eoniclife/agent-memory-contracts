@@ -18,6 +18,9 @@ Changes:
   - `record_type`;
   - `allowed_record_types`;
 - preserve the existing constructor shape by giving every new field a default;
+- keep new metadata fields out of dataclass equality/hash comparisons so
+  existing expected `AccessDecision(record_id, action, reason)` values still
+  compare equal to structured `check_access` results;
 - keep `record_id`, `action`, and human-readable `reason` unchanged;
 - add `AccessSummary.by_reason_code`;
 - make `summarize_access` prefer structured decision fields and fall back to
@@ -63,6 +66,10 @@ MCP fail-closed unknown privacy handling uses:
 
 Human-readable `reason` remains present for logs and UI copy, but programmatic
 branching should use `action` and `reason_code`.
+
+`AccessSummary.by_reason_code` is also excluded from dataclass equality
+comparisons so existing six-field expected summaries remain compatible with
+new structured summaries.
 
 ## Local Gates
 

@@ -206,6 +206,19 @@ class TestAccessScopeHelper(unittest.TestCase):
             {"unknown_privacy_class": 1},
         )
 
+    def test_unknown_record_privacy_decision_includes_scope_metadata(self) -> None:
+        result = _evaluate_access_scope(
+            {"source_records": [{"id": "x", "privacy_class": "classified"}]},
+            {
+                "max_privacy_class": "highly_sensitive",
+                "allowed_record_types": ["source_record"],
+            },
+            MCPConfig(maximum_privacy_class="highly_sensitive"),
+        )
+        decision = result["decisions"][0]
+        self.assertEqual(decision["record_type"], "source_record")
+        self.assertEqual(decision["allowed_record_types"], ["source_record"])
+
     def test_malformed_allowed_record_types_fails_closed(self) -> None:
         with self.assertRaises(ValueError):
             _scope_from_dict(

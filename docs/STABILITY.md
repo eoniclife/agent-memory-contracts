@@ -174,6 +174,12 @@ audit script `scripts/audit_public_api.py` walks
 | `customer_scope` | `access` | Scope factory: up to private |
 | `private_scope` | `access` | Scope factory: all records |
 
+The v1.3.0 structured metadata on `AccessDecision` and
+`AccessSummary.by_reason_code` is additive and serializable, but does
+not participate in dataclass equality/hash comparison. Existing
+expected values that compare only the original constructor fields remain
+compatible.
+
 ### Embedding input (v1.0.0-alpha.1)
 
 | Name | Module | Description |

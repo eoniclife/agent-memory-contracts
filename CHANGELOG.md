@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `AccessDecision` now carries machine-readable access metadata
   (`reason_code`, `privacy_class`, `max_privacy_class`, `record_type`, and
   `allowed_record_types`) while preserving the human-readable `reason` string.
+  The new metadata fields preserve existing dataclass equality/hash comparisons.
   `AccessSummary` now includes `by_reason_code`, and MCP access evaluation
   serializes the structured decision and summary fields.
 

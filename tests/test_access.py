@@ -239,6 +239,19 @@ class TestCheckAccess(unittest.TestCase):
         self.assertEqual(d.reason_code, "unspecified")
         self.assertIsNone(d.privacy_class)
 
+    def test_structured_metadata_does_not_change_decision_equality(self) -> None:
+        src = _build_source("public", "1")
+        scope = team_scope()
+        d = check_access(src, scope)
+        self.assertEqual(
+            d,
+            AccessDecision(d.record_id, d.action, d.reason),
+        )
+        self.assertEqual(
+            hash(d),
+            hash(AccessDecision(d.record_id, d.action, d.reason)),
+        )
+
 
 class TestScopeBundle(unittest.TestCase):
     """scope_bundle filters a bundle and returns per-record decisions."""
@@ -351,6 +364,23 @@ class TestSummarizeAccess(unittest.TestCase):
         ])
         self.assertEqual(summary.by_privacy_class, {"public": 1})
         self.assertEqual(summary.by_reason_code, {"unspecified": 1})
+
+    def test_reason_code_summary_does_not_change_summary_equality(self) -> None:
+        bundle = _build_all_classes_bundle()
+        scope = team_scope()
+        _, decisions = scope_bundle(bundle, scope)
+        summary = summarize_access(decisions)
+        self.assertEqual(
+            summary,
+            AccessSummary(
+                summary.total,
+                summary.allowed,
+                summary.redacted,
+                summary.dropped,
+                summary.by_privacy_class,
+                summary.by_action,
+            ),
+        )
 
 
 class TestDataclassRecordAccess(unittest.TestCase):

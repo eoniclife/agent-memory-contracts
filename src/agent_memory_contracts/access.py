@@ -146,11 +146,14 @@ class AccessDecision:
     record_id: str
     action: Literal["allow", "redact", "drop"]
     reason: str
-    reason_code: str = "unspecified"
-    privacy_class: str | None = None
-    max_privacy_class: str | None = None
-    record_type: str | None = None
-    allowed_record_types: tuple[str, ...] | None = None
+    reason_code: str = field(default="unspecified", compare=False)
+    privacy_class: str | None = field(default=None, compare=False)
+    max_privacy_class: str | None = field(default=None, compare=False)
+    record_type: str | None = field(default=None, compare=False)
+    allowed_record_types: tuple[str, ...] | None = field(
+        default=None,
+        compare=False,
+    )
 
     def __repr__(self) -> str:
         return f"AccessDecision({self.record_id!r}: {self.action} - {self.reason})"
@@ -174,7 +177,7 @@ class AccessSummary:
     dropped: int
     by_privacy_class: Mapping[str, int] = field(default_factory=dict)
     by_action: Mapping[str, int] = field(default_factory=dict)
-    by_reason_code: Mapping[str, int] = field(default_factory=dict)
+    by_reason_code: Mapping[str, int] = field(default_factory=dict, compare=False)
 
 
 # ---------------------------------------------------------------------------
