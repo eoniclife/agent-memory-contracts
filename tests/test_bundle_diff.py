@@ -296,6 +296,24 @@ class DictDataclassEquivalenceTests(unittest.TestCase):
         diff_dict = bundle_diff(a_dict, b_dict)
         self.assertEqual(diff_dict.changed, diff_dc.changed)
 
+    def test_dataclass_id_property_is_used_as_semantic_id(self):
+        @dataclass(frozen=True)
+        class _PropertyId:
+            slug: str
+            value: int
+
+            @property
+            def id(self) -> str:
+                return f"rec_{self.slug}"
+
+        diff = bundle_diff(
+            [_PropertyId(slug="a", value=1), _PropertyId(slug="b", value=1)],
+            [_PropertyId(slug="b", value=1)],
+        )
+        self.assertEqual(diff.unchanged_count, 1)
+        self.assertEqual(len(diff.removed), 1)
+        self.assertEqual(diff.removed[0]["slug"], "a")
+
 
 class FingerprintShortCircuitTests(unittest.TestCase):
     def test_equal_fingerprints_short_circuits(self):

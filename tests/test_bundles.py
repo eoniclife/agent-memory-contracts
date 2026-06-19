@@ -227,6 +227,26 @@ class DictDataclassEquivalenceTests(unittest.TestCase):
         b = bundle_fingerprint([{"id": "o1", "inner": {"k": 1, "v": 2}}])
         self.assertEqual(a, b)
 
+    def test_dataclass_id_property_is_used_as_semantic_id(self):
+        @dataclass(frozen=True)
+        class _PropertyId:
+            slug: str
+            value: int
+
+            @property
+            def id(self) -> str:
+                return f"rec_{self.slug}"
+
+        a = _PropertyId(slug="a", value=1)
+        b = _PropertyId(slug="b", value=1)
+        # The id is a dataclass property, not an asdict() field. The
+        # bundle must still keep both records as distinct semantic ids,
+        # matching the pre-duplicate-mode behavior.
+        self.assertNotEqual(
+            bundle_fingerprint([a, b]),
+            bundle_fingerprint([b]),
+        )
+
 
 class IdempotencyTests(unittest.TestCase):
     def test_repeated_runs_same_hash(self):

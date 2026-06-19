@@ -401,6 +401,23 @@ class MixedInputTypesTests(unittest.TestCase):
         self.assertEqual(len(m.records), 6)
         self.assertEqual(m.conflicts, [])
 
+    def test_dataclass_id_property_is_used_as_semantic_id(self):
+        @dataclass(frozen=True)
+        class _PropertyId:
+            slug: str
+            value: int
+
+            @property
+            def id(self) -> str:
+                return f"rec_{self.slug}"
+
+        m = merge_bundles([
+            _PropertyId(slug="a", value=1),
+            _PropertyId(slug="b", value=1),
+        ])
+        self.assertEqual(len(m.records), 2)
+        self.assertEqual([r["slug"] for r in m.records], ["a", "b"])
+
 
 class RealWorldTests(unittest.TestCase):
     """End-to-end with the library's own record types."""

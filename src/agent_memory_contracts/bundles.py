@@ -106,7 +106,10 @@ def _canonical_record(record: Any, id_field: str) -> tuple[str, str]:
     ``getattr``; the canonical JSON is built from ``asdict``.
     """
     rec_dict = _record_dict(record)
-    id_value = rec_dict.get(id_field, "")
+    if is_dataclass(record) and not isinstance(record, type):
+        id_value = getattr(record, id_field, "")
+    else:
+        id_value = rec_dict.get(id_field, "")
     canonical = canonical_json(rec_dict)
     return str(id_value), canonical
 
