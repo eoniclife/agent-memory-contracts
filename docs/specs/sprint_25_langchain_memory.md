@@ -158,8 +158,10 @@ ContractsMemory` and use it as a drop-in `memory=` arg.
    LangChain input/output is conversational. Trusted facts or
    preferences require an extraction and reducer path outside this
    adapter.
-4. **`MemoryStore` is in-memory only.** No file backend, no DB.
-   v1.1.0+ will add a `PersistentMemoryStore` if a user asks.
+4. **`MemoryStore` is in-memory only.** No file backend, no DB, and no
+   internal synchronization for concurrent writers. Applications sharing a
+   store across threads must serialize writes externally or provide a
+   synchronized store implementation.
 5. **`MemoryStore` evicts the oldest bundle when
    `max_bundles` is exceeded.** Default: `max_bundles=100`.
    This is a soft limit, not a hard cap.

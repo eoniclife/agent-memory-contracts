@@ -277,7 +277,7 @@ requires the `langchain-classic` package (installed via
 | --- | --- | --- |
 | `ContractsMemory` | `integrations.langchain` | A `BaseMemory` subclass |
 | `ContractsMemoryConfig` | `integrations.langchain` | Configuration dataclass |
-| `MemoryStore` | `integrations.langchain` | In-memory bundle store |
+| `MemoryStore` | `integrations.langchain` | In-memory, unsynchronized bundle store |
 
 ### MCP server (v1.0.2)
 

@@ -534,7 +534,7 @@ Requires Python 3.10+. No runtime dependencies.
 
 ```bash
 pip install -e ".[dev]"
-pytest -q                            # 845 collected tests
+pytest -q                            # 852 collected tests
 PYTHONPATH=src python examples/quickstart.py
 PYTHONPATH=src python examples/extract_taste_cards.py
 PYTHONPATH=src python examples/reference_reducer.py
