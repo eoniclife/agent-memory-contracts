@@ -93,6 +93,8 @@ Fix-pass after independent review:
 - corrected the remaining stale LangChain `save_context` docstring;
 - corrected packaged `docs/specs/sprint_25_langchain_memory.md` claims so it
   describes trace records rather than trusted facts or reducer decisions;
+- cleaned residual `langchain.memory` pseudocode in the packaged Sprint 25
+  spec so it matches `langchain_classic.base_memory`;
 - replaced the unresolved release-provenance placeholder with a release-tag
   provenance statement;
 - reran targeted LangChain tests, mypy, API audit, compileall, diff check, and

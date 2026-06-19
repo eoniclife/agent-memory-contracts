@@ -106,9 +106,8 @@ trusted-fact channel.
 | `MemoryStore` | `integrations.langchain` | A bundle store, indexed by session id |
 | `ContractsMemoryConfig` | `integrations.langchain` | Configuration: privacy class, max_bundles, max_records_per_load, and build metadata |
 
-`integrations.langchain` is a new module. It imports
-`langchain.memory.BaseMemory` (from `langchain-classic`) and
-re-exports the 3 names.
+`integrations.langchain` is a module. It imports
+`langchain_classic.base_memory.BaseMemory` and re-exports the 3 names.
 
 ## Dependencies
 
@@ -132,8 +131,8 @@ runs `pip install agent-memory-contracts[langchain]`.
     on `from agent_memory_contracts.integrations.langchain import ...`,
     not on `import agent_memory_contracts`).
 - The optional-dep gate follows the pattern from
-  `tests/test_jsonschema_validator.py`: tests skip with
-  `pytest.importorskip("langchain.memory")` so the suite
+  `tests/test_jsonschema_validator.py`: tests skip when
+  `langchain_classic.base_memory` is unavailable, so the suite
   remains green when the extra is not installed.
 
 ## Example
@@ -227,9 +226,9 @@ from agent_memory_contracts import (
     # ... etc
 )
 
-_LANGCHAIN_AVAILABLE = "langchain.memory" in sys.modules
+_LANGCHAIN_AVAILABLE = "langchain_classic.base_memory" in sys.modules
 try:
-    from langchain.memory import BaseMemory  # type: ignore
+    from langchain_classic.base_memory import BaseMemory  # type: ignore
     _LANGCHAIN_INSTALLED = True
 except ImportError:
     _LANGCHAIN_INSTALLED = False
@@ -286,7 +285,7 @@ shape, not the body.
 - [ ] `pyproject.toml` updated: `[langchain]` extra adds
       `langchain-classic>=0.1`; `[all]` extra includes it.
 - [ ] `tests/test_integrations_langchain.py` with ~15 tests,
-      gated on `pytest.importorskip("langchain.memory")`.
+      gated on `langchain_classic.base_memory` availability.
 - [ ] `examples/langchain_memory.py` runs end-to-end with a
       mock LLM (or the OpenAI API key from env if available).
 - [ ] `docs/STABILITY.md` updated with the 3 new public names.
