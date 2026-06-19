@@ -39,7 +39,7 @@ def validate_acyclic_supersession_graph(
         if len(cycle) <= 2:
             return cycle
         body = cycle[:-1]
-        best = min(range(len(body)), key=lambda i: body[i:] + body[:i])
+        best = min(range(len(body)), key=body.__getitem__)
         rotated = body[best:] + body[:best]
         return rotated + [rotated[0]]
 

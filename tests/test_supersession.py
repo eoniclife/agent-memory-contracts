@@ -46,6 +46,27 @@ class SupersessionGraphTests(unittest.TestCase):
                 record_kind="record",
             )
 
+    def test_very_large_cycle_raises_bounded_contract_error(self):
+        with self.assertRaisesRegex(
+            ValueError,
+            "record supersession cycle detected",
+        ):
+            validate_acyclic_supersession_graph(
+                _chain(50_000, cycle=True),
+                record_kind="record",
+            )
+
+    def test_convergent_acyclic_dag_is_accepted(self):
+        validate_acyclic_supersession_graph(
+            {
+                "node_a": _Record(("node_b", "node_c")),
+                "node_b": _Record(("node_d",)),
+                "node_c": _Record(("node_d",)),
+                "node_d": _Record(()),
+            },
+            record_kind="record",
+        )
+
     def test_self_loop_is_rejected(self):
         with self.assertRaisesRegex(
             ValueError,
@@ -81,6 +102,33 @@ class SupersessionGraphTests(unittest.TestCase):
         self.assertEqual(
             errors[0],
             "record supersession cycle detected: node_a -> node_b -> node_a",
+        )
+
+    def test_cycle_error_is_canonical_across_mapping_order(self):
+        graph_a_first = {
+            "node_a": _Record(("node_b",)),
+            "node_b": _Record(("node_c",)),
+            "node_c": _Record(("node_a",)),
+        }
+        graph_c_first = {
+            "node_c": _Record(("node_a",)),
+            "node_b": _Record(("node_c",)),
+            "node_a": _Record(("node_b",)),
+        }
+
+        errors: list[str] = []
+        for graph in (graph_a_first, graph_c_first):
+            with self.assertRaises(ValueError) as ctx:
+                validate_acyclic_supersession_graph(
+                    graph,
+                    record_kind="record",
+                )
+            errors.append(str(ctx.exception))
+
+        self.assertEqual(errors[0], errors[1])
+        self.assertEqual(
+            errors[0],
+            "record supersession cycle detected: node_a -> node_b -> node_c -> node_a",
         )
 
 

@@ -25,8 +25,8 @@ Changed surfaces:
   and core state families.
 - `src/agent_memory_contracts/state_queries.py`: adds visited-set protection to
   state supersession-chain helpers.
-- `tests/test_supersession.py`: long-chain, long-cycle, self-loop, and
-  deterministic-message coverage for the shared helper.
+- `tests/test_supersession.py`: long-chain, 50,000-node cycle, convergent DAG,
+  self-loop, and deterministic-message coverage for the shared helper.
 - `tests/test_ledger.py`, `tests/test_taste.py`, `tests/test_state.py`: focused
   cycle rejection and malformed-chain tests across ledger, TasteCard, project
   state, and core state.
@@ -49,7 +49,8 @@ now fail validation even if each individual link is reciprocal and each local
 temporal comparison passes. Valid acyclic bundles remain accepted.
 
 Deep valid acyclic histories are accepted without depending on Python recursion
-depth; cycle detection uses an explicit stack.
+depth; cycle detection uses an explicit stack. Cycle error canonicalization is
+linear in the reported cycle length.
 
 Query helper behavior is also stricter for malformed raw dictionaries:
 `taste_supersession_chain` and state supersession-chain helpers now raise
@@ -71,7 +72,8 @@ python -m compileall -q src
 
 Results:
 
-- Focused helper, plane, and runtime tests passed.
+- Focused helper, plane, and runtime tests passed, including a 50,000-node
+  invalid-cycle regression for bounded structured rejection.
 - Invariant tests passed with expected Arthashila dataset skips.
 - Full suite passed with expected Arthashila dataset skips and the existing
   jsonschema-installed skip.
