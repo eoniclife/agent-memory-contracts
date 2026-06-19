@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
+from ._canonical import canonical_json
 from .evidence_ids import sha256_hex
 
 PREFIX_BY_LEDGER_TYPE = {
@@ -15,7 +15,7 @@ PREFIX_BY_LEDGER_TYPE = {
 
 
 def canonical_payload(value: Any) -> str:
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return canonical_json(value)
 
 
 def make_reducer_decision_id(

@@ -34,10 +34,10 @@ The function is stdlib-only. No new dependencies.
 
 from __future__ import annotations
 
-import json
 from dataclasses import asdict, is_dataclass
 from typing import Any, Iterable, Mapping
 
+from ._canonical import canonical_json
 from .evidence_ids import sha256_hex
 
 #: Separator inserted between records' canonical JSON in the bundle
@@ -66,12 +66,7 @@ def _canonical_record(record: Any, id_field: str) -> tuple[str, str]:
         # Last resort: try to use it as a Mapping protocol.
         rec_dict = dict(record)
         id_value = rec_dict.get(id_field, "")
-    canonical = json.dumps(
-        rec_dict,
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=False,
-    )
+    canonical = canonical_json(rec_dict)
     return str(id_value), canonical
 
 

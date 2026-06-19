@@ -7,9 +7,10 @@ answer) appends one anchor row::
     seq | tenant_id | scope | fingerprint | prev_fingerprint
         | actor | kind | created_at
 
-- ``scope`` is canonical JSON naming exactly what the fingerprint
+- ``scope`` is stable JSON naming exactly what the fingerprint
   covers: the record ids written in the batch plus the
-  supersession / status-override edge keys. Scopes make every
+  supersession / status-override edge keys. Its stored text uses
+  the legacy scope serialization for compatibility. Scopes make every
   anchor **replayable**: anyone can recompute the fingerprint from
   the immutable stored payloads at any later time.
 - ``fingerprint`` is the library's :func:`bundle_fingerprint` over
@@ -138,7 +139,7 @@ def make_scope(
     supersession_edges: Iterable[tuple[str, str, str]] = (),
     status_overrides: Iterable[tuple[str, str, str]] = (),
 ) -> dict[str, Any]:
-    """Build a canonical anchor scope.
+    """Build a normalized anchor scope.
 
     Args:
         record_ids: ids of the plane-table rows the batch wrote.

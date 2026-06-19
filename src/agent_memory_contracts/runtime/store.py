@@ -77,6 +77,7 @@ from pathlib import Path
 from types import TracebackType
 from typing import Any, Iterator, Protocol, Sequence
 
+from .._canonical import canonical_json as _canonical_json
 from ..access import PRIVACY_CLASS_ORDER
 from ..ledger_contracts import parse_iso8601
 
@@ -175,8 +176,7 @@ def canonical_json(value: Any) -> str:
     """Canonical JSON exactly as the library's id helpers produce it
     (sorted keys, tight separators, non-ASCII preserved). Never
     reimplement canonicalization elsewhere (ADR-1)."""
-    return json.dumps(value, sort_keys=True, separators=(",", ":"),
-                      ensure_ascii=False)
+    return _canonical_json(value)
 
 
 def _loads_dict(payload: str) -> dict[str, Any]:
@@ -406,9 +406,10 @@ CREATE TABLE IF NOT EXISTS entry_evidence (
     PRIMARY KEY (tenant_id, entry_id, span_id)
 );
 
--- ADR-6: the audit anchor hash chain. scope is canonical JSON of
--- the record ids + edge keys the fingerprint covers, so
--- verify_chain can recompute every anchor at any later time.
+-- ADR-6: the audit anchor hash chain. scope is stable JSON of the
+-- record ids + edge keys the fingerprint covers, serialized with
+-- legacy scope bytes so verify_chain can recompute every anchor at
+-- any later time.
 CREATE TABLE IF NOT EXISTS audit_anchors (
     seq              INTEGER PRIMARY KEY AUTOINCREMENT,
     tenant_id        TEXT NOT NULL,

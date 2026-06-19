@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
+from ._canonical import canonical_json
 from .evidence_ids import sha256_hex
 
 PREFIX_BY_TYPE = {
@@ -17,7 +17,7 @@ PREFIX_BY_TYPE = {
 
 
 def canonical_payload(value: Any) -> str:
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return canonical_json(value)
 
 
 def make_candidate_id(candidate_type: str, evidence_span_ids: list[str], normalized_payload: dict[str, Any]) -> str:
@@ -30,4 +30,3 @@ def make_candidate_id(candidate_type: str, evidence_span_ids: list[str], normali
     }
     digest = sha256_hex(canonical_payload(payload))[:24]
     return f"{PREFIX_BY_TYPE[candidate_type]}_{digest}"
-

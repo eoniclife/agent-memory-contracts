@@ -13,6 +13,7 @@ model the anchors exist for.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import tempfile
 import unittest
@@ -102,6 +103,23 @@ class ChainHappyPathTests(_AnchoredStoreCase):
                                     created_at=T_CREATED)
             self.store._disarm_guard(conn)
         self.assertEqual(receipt.kind, "verified")
+        self.assertEqual(self.store.list_anchors()[-1]["scope"],
+                         json.dumps(scope, sort_keys=True,
+                                    separators=(",", ":")))
+        result = verify_chain(self.store)
+        self.assertTrue(result.ok, result.divergence)
+
+    def test_append_anchor_preserves_legacy_non_ascii_scope_bytes(self):
+        scope = {"record_ids": [], "note": "é"}
+        with self.store._txn() as conn:
+            self.store._arm_guard(conn)
+            append_anchor(self.store, conn, scope=scope, kind="verified",
+                          actor="test-nightly", created_at=T_CREATED)
+            self.store._disarm_guard(conn)
+        self.assertEqual(
+            self.store.list_anchors()[-1]["scope"],
+            json.dumps(scope, sort_keys=True, separators=(",", ":")),
+        )
         result = verify_chain(self.store)
         self.assertTrue(result.ok, result.divergence)
 
