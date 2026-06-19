@@ -1,10 +1,23 @@
 # Sprint 25 / v1.0.1: LangChain Memory Backend Integration
 
-**Status:** planned
-**Target version:** `1.0.1` (minor; backwards-compatible, additive)
+**Status:** implemented; v1.3.0 errata applied
+**Target version:** historical `1.0.1` plan; current semantics corrected in `1.3.0`
 **Depends on:** v1.0.0 final (commit `408606b`)
 **Spec author:** Mavis (best-judgment draft)
 **Spec written:** 2026-06-07
+
+## v1.3.0 errata
+
+The original planning draft overstated the LangChain adapter as writing
+trusted ledger entries and reducer decisions. The shipped adapter is narrower:
+`ContractsMemory.save_context()` records conversation turns as a session
+`SourceRecord`, `EpisodeRecord`, and input/output `EvidenceSpan` records, then
+`load_memory_variables()` returns a ContextPack-shaped session trace. It does
+not promote turns into trusted facts, run a reducer, or make a LangChain
+application's whole memory stack poisoning-resistant.
+
+This spec is shipped in the sdist, so the text below describes the corrected
+public behavior rather than preserving the stale draft claim.
 
 ## Why this sprint
 
@@ -12,31 +25,33 @@ Hermes competitive analysis (June 2026) identified three integration
 gaps. Sprint 25 covers gap #3: **LangChain memory backend**.
 
 LangChain's `BaseMemory` is the conventional interface for memory
-in LangChain chains. The library has 4 planes (evidence, candidate,
-ledger, taste), a `ContextPack` compiler, and a citation graph, but
-no adapter that lets a LangChain chain use it as the memory store.
+in classic LangChain chains. The library has six planes, a
+`ContextPack` shape, and citation/validation primitives, but no
+adapter that lets a LangChain chain record turns in the contracts
+format.
 
 This is a 200-300 LOC adapter that:
 
-1. Wraps the library's bundle + `compile_context_pack` as a
-   `BaseMemory` subclass.
+1. Wraps the library's bundle-shaped records as a `BaseMemory`
+   subclass.
 2. Implements the 3 required methods (`memory_variables`,
    `load_memory_variables`, `save_context`, `clear`).
-3. Maps LangChain's input/output keys onto the library's
-   record types and ledger entries.
+3. Maps LangChain's input/output keys onto session source,
+   episode, and evidence-span records.
 
-It is the smallest integration that exposes the library's
-integrity layer (citation graph, source coverage) to a LangChain
-chain. It is the proof that "use it in your chain" is a 1-line
-swap, not a 500-line rewrite.
+It is the smallest integration that exposes the library's record
+shape to a LangChain chain. It is proof that "use it in your chain"
+can be a 1-line trace-capture swap, not a 500-line rewrite. It is
+not proof that a classic LangChain memory object is now a governed
+trusted-fact channel.
 
 ## What this sprint is not
 
 - **Not a wrapper around the LangChain `Memory` class hierarchy.**
   We do not implement `BaseChatMemory`, `ConversationBufferMemory`,
   `ConversationSummaryMemory`, or any of the conversation-shaped
-  classes. Those are conversation abstractions; the library is
-  a fact/decision/preference/project ledger.
+  classes. Those are conversation abstractions; this adapter is
+  a source/episode/evidence trace adapter.
 - **Not a vector store.** The library is `BaseMemory`-shaped, not
   `VectorStore`-shaped. Vector store integration (gap #1 in Hermes
   analysis) is a separate v1.1.0+ consideration.
@@ -76,13 +91,11 @@ swap, not a 500-line rewrite.
 
 - Holds a `MemoryStore` (an in-memory list of bundles, indexed
   by `session_id`).
-- On `load_memory_variables`, compiles a `ContextPack` for the
-  active session using `compile_context_pack` from v1.0.0 final,
-  scoped to the privacy class of the chain.
-- On `save_context`, extracts the new turn's input/output as a
-  `FactLedgerEntry` (default) or a `PreferenceLedgerEntry` (if
-  the input looks like a preference), records a
-  `MemoryReducerDecision`, and appends to the bundle.
+- On `load_memory_variables`, returns a ContextPack-shaped session
+  trace for the active session.
+- On `save_context`, records the new turn's input/output as one
+  `EpisodeRecord` plus input/output `EvidenceSpan` records under a
+  session `SourceRecord`, and appends to the bundle.
 - On `clear`, removes the session.
 
 ## Public API
@@ -91,7 +104,7 @@ swap, not a 500-line rewrite.
 | --- | --- | --- |
 | `ContractsMemory` | `integrations.langchain` | A `BaseMemory` subclass wrapping the library |
 | `MemoryStore` | `integrations.langchain` | A bundle store, indexed by session id |
-| `ContractsMemoryConfig` | `integrations.langchain` | Configuration: privacy class, scope, max_bundles |
+| `ContractsMemoryConfig` | `integrations.langchain` | Configuration: privacy class, max_bundles, max_records_per_load, and build metadata |
 
 `integrations.langchain` is a new module. It imports
 `langchain.memory.BaseMemory` (from `langchain-classic`) and
@@ -113,7 +126,7 @@ runs `pip install agent-memory-contracts[langchain]`.
   - 3 tests for the `MemoryStore` (put, get, evict).
   - 5 tests for `ContractsMemory` (load, save, clear, session
     isolation, scope enforcement).
-  - 4 tests for the round-trip (write facts, read them back via
+  - 4 tests for the round-trip (write trace records, read them back via
     `load_memory_variables`).
   - 3 tests for the optional-dep gate (no langchain → `ImportError`
     on `from agent_memory_contracts.integrations.langchain import ...`,
@@ -137,23 +150,25 @@ ContractsMemory` and use it as a drop-in `memory=` arg.
 1. **Default privacy class: `internal`.** Most LangChain chains
    are for internal tooling. `customer` and `private` are
    opt-in via `ContractsMemoryConfig(privacy_class="private")`.
-2. **Default scope: `team_scope`.** Mirrors the v0.9.0 default.
-   `public_scope` and `private_scope` are opt-in.
-3. **`save_context` extracts facts, not preferences, by default.**
-   LangChain input/output is conversational, not preferency.
-   `extract_as_preference=True` is the opt-in for chains that
-   want to record preferences.
+2. **No access-scope enforcement in the adapter.** The privacy class
+   is assigned to generated source/span trace records. Applications
+   that need trusted access filtering should run the relevant
+   contracts/runtime access path outside this adapter.
+3. **`save_context` records trace, not facts or preferences.**
+   LangChain input/output is conversational. Trusted facts or
+   preferences require an extraction and reducer path outside this
+   adapter.
 4. **`MemoryStore` is in-memory only.** No file backend, no DB.
    v1.1.0+ will add a `PersistentMemoryStore` if a user asks.
 5. **`MemoryStore` evicts the oldest bundle when
    `max_bundles` is exceeded.** Default: `max_bundles=100`.
    This is a soft limit, not a hard cap.
-6. **No `ConversationSummaryMemory` integration.** The library
-   is a fact ledger, not a conversation log. The "summary"
-   pattern does not map cleanly.
+6. **No `ConversationSummaryMemory` integration.** This adapter
+   records raw turn trace, not summaries. The "summary" pattern
+   does not map cleanly.
 7. **No `ConversationBufferWindowMemory` integration.** Same
    reason. A buffer window is a "last N messages" abstraction;
-   the library is "all trusted facts" with citation graphs.
+   this adapter returns a ContextPack-shaped trace.
 8. **`load_memory_variables` returns a single `ContextPack`-shaped
    dict**, not a list of message strings. The chain's prompt
    template references `memory["context_pack"]` and formats it
@@ -170,16 +185,16 @@ ContractsMemory` and use it as a drop-in `memory=` arg.
     `langchain` extra installs `langchain-classic`. We do not
     depend on the legacy `langchain<0.1` package.
 
-11. **`save_context` does not call the LLM.** It writes the
-    raw input/output as a `FactLedgerEntry` candidate; the
-    reducer decision is the audit record. LLM-based extraction
-    (e.g., "this turn expresses a preference") is a v1.1.0+
-    feature, gated on the user installing their model of choice.
+11. **`save_context` does not call the LLM.** It writes raw
+    input/output as source/episode/evidence trace. LLM-based
+    extraction into candidate claims or preferences is product
+    code outside this adapter and must still pass through a
+    reducer before becoming trusted memory.
 
 12. **The integration does not ship a `Memory` class that
     implements `BaseChatMemory`.** `BaseChatMemory` is for
     chat-model chains and adds message-list semantics. The
-    library is ledger-shaped, not chat-shaped. A
+    adapter is trace-shaped, not chat-shaped. A
     `BaseChatMemory` adapter would either be a thin shim
     that re-implements the same logic, or it would distort
     the library's API to look like `messages`. Neither is
@@ -198,20 +213,17 @@ from dataclasses import dataclass, field
 from typing import Any, Iterator, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from langchain.memory import BaseMemory
+    from langchain_classic.base_memory import BaseMemory
 
 from agent_memory_contracts import (
     Bundle,
-    ContextPack,
     PrivacyClass,
-    compile_context_pack,
-    check_access,
-    team_scope,
-    public_scope,
-    customer_scope,
-    private_scope,
-    make_ledger_entry_id,
-    make_reducer_decision_id,
+    SourceRecord,
+    EpisodeRecord,
+    EvidenceSpan,
+    make_episode_id,
+    make_source_id,
+    make_span_id,
     # ... etc
 )
 
@@ -226,9 +238,8 @@ except ImportError:
 @dataclass(frozen=True)
 class ContractsMemoryConfig:
     privacy_class: PrivacyClass = "internal"
-    scope_factory: str = "team"  # public / team / customer / private
     max_bundles: int = 100
-    extract_as_preference: bool = False
+    max_records_per_load: int = 20
 
 
 class MemoryStore:
@@ -247,7 +258,7 @@ if _LANGCHAIN_INSTALLED:
         """A BaseMemory subclass backed by an agent-memory-contracts bundle."""
         # memory_variables: list[str] = ["context_pack"]
         # load_memory_variables: returns {"context_pack": {...}}
-        # save_context: extracts FactLedgerEntry, records MemoryReducerDecision
+        # save_context: records EpisodeRecord plus input/output EvidenceSpan
         # clear: removes session
         ...
 ```
@@ -260,8 +271,8 @@ shape, not the body.
 - Vector store integration (Hermes gap #1).
 - Tool / agent integration (Hermes gap #2; "agent that uses the
   library as a tool" is a different shape).
-- LLM-based extraction in `save_context` (gated on user model
-  choice; v1.1.0+).
+- LLM-based extraction from trace into candidates or preferences
+  (gated on user model choice; product code outside this adapter).
 - Persistent `MemoryStore` (file / DB backend; v1.1.0+).
 - LangSmith tracing integration (LangChain's tracing is a
   separate concern; out of scope for the memory adapter).
@@ -281,7 +292,7 @@ shape, not the body.
 - [ ] `docs/STABILITY.md` updated with the 3 new public names.
 - [ ] `CHANGELOG.md` updated with the v1.0.1 section.
 - [ ] `docs/specs/DECISIONS.md` updated with the v1.0.1 entry.
-- [ ] All 501 existing tests still pass; ~15 new tests pass.
+- [ ] Historical target: all 501 existing tests still pass; ~15 new tests pass.
 - [ ] `mypy --strict` clean on the new module (or skipped if
       langchain is not installed).
 - [ ] `scripts/audit_public_api.py` passes.
@@ -291,6 +302,7 @@ shape, not the body.
 
 This sprint ships a 1-line LangChain integration: replace
 `ConversationBufferMemory()` with `ContractsMemory()` and the
-chain's memory is now a fact ledger with citation graphs and
-source coverage enforcement. It is the proof that the library
-is composable with the most popular LLM framework, not a toy.
+chain records turns as source/episode/evidence trace with a
+ContextPack-shaped read surface. It is proof that the library
+is composable with the most popular LLM framework, while keeping
+trusted-fact promotion outside this adapter.

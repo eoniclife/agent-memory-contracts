@@ -27,6 +27,8 @@ Changes:
 - correct LangChain integration claims: `ContractsMemory` records
   source/episode/evidence trace and returns a ContextPack-shaped memory
   variable; it does not promote turns into trusted ledger facts;
+- correct the packaged historical Sprint 25 LangChain spec with a v1.3.0
+  errata note so the sdist does not ship stale fact-ledger/reducer claims;
 - apply `ContractsMemoryConfig.privacy_class` to generated SourceRecord and
   EvidenceSpan records;
 - add regression coverage for LangChain trace-vs-ledger behavior and privacy
@@ -85,6 +87,16 @@ git diff --check
 # sdist: agent_memory_contracts-1.3.0.tar.gz (202 members)
 # wheel: agent_memory_contracts-1.3.0-py3-none-any.whl (69 members)
 ```
+
+Fix-pass after independent review:
+
+- corrected the remaining stale LangChain `save_context` docstring;
+- corrected packaged `docs/specs/sprint_25_langchain_memory.md` claims so it
+  describes trace records rather than trusted facts or reducer decisions;
+- replaced the unresolved release-provenance placeholder with a release-tag
+  provenance statement;
+- reran targeted LangChain tests, mypy, API audit, compileall, diff check, and
+  release artifact verification before pushing the fix-pass head.
 
 ## Reviewer Questions
 

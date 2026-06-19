@@ -532,7 +532,7 @@ if _LANGCHAIN_BASE_MEMORY is not None:
         def save_context(
             self, inputs: dict[str, Any], outputs: dict[str, str]
         ) -> None:
-            """Record a turn as an EpisodeRecord + evidence spans + fact."""
+            """Record a turn as an EpisodeRecord plus evidence spans."""
             turn_index = self._turn_index
             self._turn_index += 1
             # Build (or fetch) the session source.

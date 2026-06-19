@@ -69,5 +69,6 @@ The review packet for this release-readiness sprint lives at
 
 - Repository: https://github.com/eoniclife/agent-memory-contracts
 - License: Apache-2.0
-- v1.3.0 commit: to be filled from the reviewed merge commit
+- Source revision: the GitHub `v1.3.0` release tag is the authoritative
+  source revision for published artifacts.
 - Package: https://pypi.org/project/agent-memory-contracts/
