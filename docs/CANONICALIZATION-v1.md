@@ -37,6 +37,7 @@ Canonicalization v1 applies to:
 - ContextPack ids: `ctx_*`, `ctxreceipt_*`, `ctxval_*`;
 - conflict resolution, hygiene, and audit ids:
   `confres_*`, `hygiene_*`, `audit_*`;
+- `record_fingerprint(record)`;
 - `bundle_fingerprint(records)`;
 - runtime `canonical_json(payload)` comparisons.
 
@@ -54,9 +55,9 @@ implementation identities, not public conformance vectors in this document.
 - No numeric normalization beyond Python's standard `json.dumps` behavior.
 - No portable guarantee for non-finite floats (`NaN`, `Infinity`,
   `-Infinity`); valid portable v1 values should use finite numbers.
-- No change to duplicate handling in bundle fingerprints.
-- No new public API in this release; existing helper names delegate to one
-  private implementation.
+- No change to default duplicate handling in bundle fingerprints.
+- No new canonicalization rule; public wrappers and duplicate modes must
+  delegate to the same v1 byte contract.
 
 ## Golden Vectors
 

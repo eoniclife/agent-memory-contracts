@@ -46,7 +46,12 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Mapping
 
-from .bundles import _canonical_record
+from .bundles import (
+    DuplicateMode,
+    _canonical_record,
+    _raise_duplicate,
+    _validate_duplicate_mode,
+)
 
 
 @dataclass(frozen=True)
@@ -86,13 +91,15 @@ def merge_bundles(
     *bundles: Iterable[Any],
     id_field: str = "id",
     prefer: str = "last",
+    duplicate_mode: DuplicateMode = "last",
 ) -> BundleMerge:
     """Return the set-semantic union of N bundles.
 
     Each input bundle is an iterable of records (dicts, Mappings, or
     dataclass instances). Records are deduplicated by ``id_field``;
     duplicate ids within a single input bundle are resolved by
-    last-write-wins and reported in ``duplicate_ids``.
+    ``duplicate_mode`` and reported in ``duplicate_ids`` unless
+    ``duplicate_mode="raise"`` aborts the merge.
 
     When the same id appears in two or more different bundles with
     different content, the merge is a *conflict*:
@@ -121,6 +128,12 @@ def merge_bundles(
             - ``"first"``: the record from the **first** bundle that
               carries the id wins.
             - ``"raise"``: raise ``ValueError`` on the first conflict.
+        duplicate_mode: How to resolve repeated ``id_field`` values
+            within each input bundle. ``"last"`` is the legacy default
+            and keeps the final occurrence. ``"first"`` keeps the first
+            occurrence. ``"raise"`` raises
+            :class:`agent_memory_contracts.DuplicateRecordError` on
+            any repeated id.
 
     Returns:
         A :class:`BundleMerge` with the merged records, the list of
@@ -129,14 +142,16 @@ def merge_bundles(
         duplicated within a single input bundle.
 
     Raises:
-        ValueError: If ``prefer`` is not one of ``"last"``,
-            ``"first"``, ``"raise"``, or if ``prefer="raise"`` and a
-            cross-bundle conflict is detected.
+        ValueError: If ``prefer`` or ``duplicate_mode`` is invalid, if
+            ``prefer="raise"`` and a cross-bundle conflict is detected,
+            or if ``duplicate_mode="raise"`` and an input bundle
+            repeats an id.
     """
     if prefer not in ("last", "first", "raise"):
         raise ValueError(
             f"prefer must be 'last', 'first', or 'raise'; got {prefer!r}"
         )
+    _validate_duplicate_mode(duplicate_mode)
 
     # Per-id accumulator:
     #   winning_canonical: the canonical JSON of the record that
@@ -166,11 +181,21 @@ def merge_bundles(
         for record in bundle:
             id_value, canonical = _canonical_record(record, id_field)
             if id_value in per_bundle_winner:
-                # Duplicate within this bundle. Last write wins; track
-                # the id as duplicated (report it once).
+                # Duplicate within this bundle. Track the id as
+                # duplicated (report it once), then apply the requested
+                # intra-bundle duplicate policy.
                 if id_value not in duplicate_seen:
                     duplicate_seen.add(id_value)
                     duplicate_ids_in_order.append(id_value)
+                if duplicate_mode == "raise":
+                    _raise_duplicate(
+                        id_field=id_field,
+                        id_value=id_value,
+                        first_canonical=per_bundle_winner[id_value],
+                        duplicate_canonical=canonical,
+                    )
+                if duplicate_mode == "first":
+                    continue
             else:
                 per_bundle_order.append(id_value)
             per_bundle_winner[id_value] = canonical

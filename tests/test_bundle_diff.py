@@ -26,6 +26,7 @@ from dataclasses import asdict, dataclass
 from unittest.mock import patch
 
 from agent_memory_contracts import (
+    DuplicateRecordError,
     PreferenceLedgerEntry,
     SourceRecord,
     bundle_fingerprint,
@@ -228,6 +229,26 @@ class DedupByIdTests(unittest.TestCase):
         # it should be in changed, not added.
         self.assertEqual(diff.added, [])
         self.assertEqual(len(diff.changed), 1)
+
+    def test_duplicate_mode_first_changes_effective_record(self):
+        a = [_rec(0), dict(_rec(0), value=99)]
+        b = [_rec(0)]
+        diff = bundle_diff(a, b, duplicate_mode="first")
+        self.assertEqual(diff.changed, [])
+        self.assertEqual(diff.unchanged_count, 1)
+
+    def test_duplicate_mode_raise_rejects_duplicate_in_before(self):
+        with self.assertRaises(DuplicateRecordError) as ctx:
+            bundle_diff([_rec(0), dict(_rec(0), value=99)], [_rec(0)],
+                        duplicate_mode="raise")
+        self.assertEqual(ctx.exception.id_value, "rec_00000000")
+        self.assertFalse(ctx.exception.same_content)
+
+    def test_duplicate_mode_raise_rejects_duplicate_in_after(self):
+        with self.assertRaises(DuplicateRecordError) as ctx:
+            bundle_diff([_rec(0)], [_rec(0), _rec(0)], duplicate_mode="raise")
+        self.assertEqual(ctx.exception.id_value, "rec_00000000")
+        self.assertTrue(ctx.exception.same_content)
 
 
 class DictDataclassEquivalenceTests(unittest.TestCase):

@@ -16,15 +16,18 @@ the library publishes both representations.
 from __future__ import annotations
 
 import unittest
+import hashlib
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from agent_memory_contracts import (
+    DuplicateRecordError,
     PreferenceLedgerEntry,
     SourceRecord,
     bundle_fingerprint,
     make_ledger_entry_id,
     make_source_id,
+    record_fingerprint,
 )
 
 
@@ -69,6 +72,26 @@ class DeterminismTests(unittest.TestCase):
         h = bundle_fingerprint([_rec(0)])
         self.assertEqual(len(h), 64)
         self.assertTrue(all(c in "0123456789abcdef" for c in h))
+
+
+class RecordFingerprintTests(unittest.TestCase):
+    def test_record_fingerprint_hashes_canonical_record_bytes(self):
+        expected = hashlib.sha256(b'{"id":"x","v":1}').hexdigest()
+        self.assertEqual(record_fingerprint({"v": 1, "id": "x"}), expected)
+
+    def test_record_fingerprint_is_content_sensitive(self):
+        a = record_fingerprint({"id": "x", "v": 1})
+        b = record_fingerprint({"id": "x", "v": 2})
+        self.assertNotEqual(a, b)
+
+    def test_record_fingerprint_dataclass_matches_dict(self):
+        rec = _dataclass_rec(1)
+        self.assertEqual(record_fingerprint(rec), record_fingerprint(_rec(1)))
+
+    def test_record_fingerprint_is_importable_from_package(self):
+        from agent_memory_contracts import record_fingerprint as package_record_fp
+
+        self.assertIs(package_record_fp, record_fingerprint)
 
 
 class OrderInsensitivityTests(unittest.TestCase):
@@ -144,6 +167,44 @@ class DedupByIdTests(unittest.TestCase):
         # of the second occurrence alone.
         alone = bundle_fingerprint([_rec(0)])
         self.assertEqual(second_wins, alone)
+
+    def test_duplicate_mode_first_keeps_first_record(self):
+        bundle = [_rec(0), dict(_rec(0), value=99)]
+        self.assertEqual(
+            bundle_fingerprint(bundle, duplicate_mode="first"),
+            bundle_fingerprint([_rec(0)]),
+        )
+
+    def test_duplicate_mode_last_is_legacy_default(self):
+        bundle = [_rec(0), dict(_rec(0), value=99)]
+        self.assertEqual(
+            bundle_fingerprint(bundle),
+            bundle_fingerprint(bundle, duplicate_mode="last"),
+        )
+
+    def test_duplicate_mode_raise_rejects_identical_duplicate(self):
+        with self.assertRaises(DuplicateRecordError) as ctx:
+            bundle_fingerprint([_rec(0), _rec(0)], duplicate_mode="raise")
+        exc = ctx.exception
+        self.assertEqual(exc.id_field, "id")
+        self.assertEqual(exc.id_value, "rec_00000000")
+        self.assertTrue(exc.same_content)
+        self.assertEqual(exc.first_fingerprint, exc.duplicate_fingerprint)
+
+    def test_duplicate_mode_raise_reports_divergent_payload_fingerprints(self):
+        with self.assertRaises(DuplicateRecordError) as ctx:
+            bundle_fingerprint(
+                [_rec(0), dict(_rec(0), value=99)],
+                duplicate_mode="raise",
+            )
+        exc = ctx.exception
+        self.assertEqual(exc.id_value, "rec_00000000")
+        self.assertFalse(exc.same_content)
+        self.assertNotEqual(exc.first_fingerprint, exc.duplicate_fingerprint)
+
+    def test_invalid_duplicate_mode_raises_valueerror(self):
+        with self.assertRaises(ValueError):
+            bundle_fingerprint([_rec(0)], duplicate_mode="bogus")  # type: ignore[arg-type]
 
 
 class DictDataclassEquivalenceTests(unittest.TestCase):

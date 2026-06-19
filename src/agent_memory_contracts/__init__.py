@@ -102,7 +102,7 @@ from .contextpack_ids import (
     make_context_pack_validation_report_id,
 )
 from .contextpack_validation import validate_contextpack_bundle
-from .bundles import bundle_fingerprint
+from .bundles import DuplicateRecordError, bundle_fingerprint, record_fingerprint
 from .merge import BundleMerge, merge_bundles
 from .conflict import (
     ConflictResolution,
@@ -255,7 +255,9 @@ __all__ = [
     "context_pack_validation_report_from_dict",
     "validate_contextpack_bundle",
     # Bundle operations
+    "DuplicateRecordError",
     "bundle_fingerprint",
+    "record_fingerprint",
     "BundleMerge",
     "merge_bundles",
     # Conflict resolution (added in 0.7.0)

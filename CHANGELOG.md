@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   audit-pack, runtime payload, and bundle-fingerprint bytes. Legacy anchor-scope
   serialization is regression-tested separately. Existing public wrapper
   functions remain in place.
+- `record_fingerprint(record)` and `DuplicateRecordError` separate semantic
+  identity from full-record payload equality. `bundle_fingerprint`,
+  `bundle_diff`, and `merge_bundles` now accept opt-in `duplicate_mode` values
+  (`last`, `first`, `raise`) while preserving legacy `last` defaults; the CLI
+  exposes the same modes with `--duplicate-mode`.
 
 ### Fixed
 

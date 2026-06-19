@@ -33,6 +33,7 @@ from typing import Any
 
 from agent_memory_contracts import (
     BundleMerge,
+    DuplicateRecordError,
     SourceRecord,
     make_source_id,
     merge_bundles,
@@ -274,6 +275,10 @@ class PreferRaiseTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             merge_bundles([_rec(0)], [_rec(1)], prefer="bogus")
 
+    def test_duplicate_mode_invalid_value_raises(self):
+        with self.assertRaises(ValueError):
+            merge_bundles([_rec(0)], duplicate_mode="bogus")  # type: ignore[arg-type]
+
 
 class DuplicateIdsInSingleBundleTests(unittest.TestCase):
     def test_duplicate_same_content_silently_resolved(self):
@@ -296,6 +301,29 @@ class DuplicateIdsInSingleBundleTests(unittest.TestCase):
         self.assertEqual(m.conflicts, [])
         # The id was duplicated.
         self.assertEqual(m.duplicate_ids, ["rec_00000000"])
+
+    def test_duplicate_mode_first_keeps_first_record_and_reports_duplicate(self):
+        bundle = [_rec(0), dict(_rec(0), value=99)]
+        m = merge_bundles(bundle, duplicate_mode="first")
+        self.assertEqual(len(m.records), 1)
+        self.assertEqual(m.records[0]["value"], 0)
+        self.assertEqual(m.conflicts, [])
+        self.assertEqual(m.duplicate_ids, ["rec_00000000"])
+
+    def test_duplicate_mode_raise_rejects_identical_duplicate(self):
+        with self.assertRaises(DuplicateRecordError) as ctx:
+            merge_bundles([_rec(0), _rec(0)], duplicate_mode="raise")
+        self.assertEqual(ctx.exception.id_value, "rec_00000000")
+        self.assertTrue(ctx.exception.same_content)
+
+    def test_duplicate_mode_raise_rejects_divergent_duplicate(self):
+        with self.assertRaises(DuplicateRecordError) as ctx:
+            merge_bundles(
+                [_rec(0), dict(_rec(0), value=99)],
+                duplicate_mode="raise",
+            )
+        self.assertEqual(ctx.exception.id_value, "rec_00000000")
+        self.assertFalse(ctx.exception.same_content)
 
     def test_duplicate_ids_reported_across_bundles(self):
         a = [_rec(0), _rec(0), _rec(1)]

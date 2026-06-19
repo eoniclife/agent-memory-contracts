@@ -129,7 +129,9 @@ audit script `scripts/audit_public_api.py` walks
 
 | Name | Module | Description |
 | --- | --- | --- |
+| `DuplicateRecordError` | `bundles` | Strict duplicate-id error with record fingerprints |
 | `bundle_fingerprint` | `bundles` | SHA-256 fingerprint of a bundle |
+| `record_fingerprint` | `bundles` | SHA-256 fingerprint of one canonical record |
 | `bundle_diff` | `bundle_diff` | Set-semantic diff of two bundles |
 | `merge_bundles` | `merge` | Set-semantic merge of N bundles |
 | `BundleMerge` | `merge` | The result of a merge (with conflict list) |

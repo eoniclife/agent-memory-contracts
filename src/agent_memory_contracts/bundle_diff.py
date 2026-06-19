@@ -18,7 +18,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Iterable
 
-from .bundles import _canonical_record, bundle_fingerprint
+from .bundles import DuplicateMode, _canonical_records_by_id, bundle_fingerprint
 
 
 @dataclass(frozen=True)
@@ -46,12 +46,13 @@ def bundle_diff(
     b: Iterable[Any],
     *,
     id_field: str = "id",
+    duplicate_mode: DuplicateMode = "last",
 ) -> BundleDiff:
     """Return the set-semantic diff between two bundles.
 
     Both ``a`` and ``b`` are treated as sets of records keyed by
-    ``id_field``.  Duplicate ids within a single bundle are resolved
-    by last-write-wins, exactly as in :func:`bundle_fingerprint`.
+    ``id_field``. Duplicate ids within either bundle are resolved by
+    ``duplicate_mode``, exactly as in :func:`bundle_fingerprint`.
 
     When the two bundles have identical fingerprints the short-circuit
     fires and the function avoids the per-record diff loop.
@@ -62,6 +63,10 @@ def bundle_diff(
         b: The "after" bundle (same record types).
         id_field: The field that uniquely identifies each record.
             Defaults to ``"id"``.
+        duplicate_mode: How to resolve repeated ``id_field`` values
+            within each input bundle. ``"last"`` is the legacy default;
+            ``"first"`` keeps the first occurrence; ``"raise"`` raises
+            :class:`agent_memory_contracts.DuplicateRecordError`.
 
     Returns:
         A :class:`BundleDiff` describing ``added``, ``removed``,
@@ -72,23 +77,23 @@ def bundle_diff(
     a_list = list(a)
     b_list = list(b)
 
-    # Build id -> canonical_json maps (last-write-wins for dupes).
-    a_by_id: dict[str, str] = {}
-    for record in a_list:
-        id_val, canonical = _canonical_record(record, id_field)
-        a_by_id[id_val] = canonical
-
-    b_by_id: dict[str, str] = {}
-    for record in b_list:
-        id_val, canonical = _canonical_record(record, id_field)
-        b_by_id[id_val] = canonical
+    a_by_id = _canonical_records_by_id(
+        a_list, id_field=id_field, duplicate_mode=duplicate_mode,
+    )
+    b_by_id = _canonical_records_by_id(
+        b_list, id_field=id_field, duplicate_mode=duplicate_mode,
+    )
 
     # Short-circuit: equal fingerprints mean identical bundles.
     # We still need to compute the correct unchanged_count even
     # when fingerprints match (a=[r,r] and b=[r] have the same fp
     # but a's raw length differs from the unique-record count).
-    fp_a = bundle_fingerprint(a_list, id_field=id_field)
-    fp_b = bundle_fingerprint(b_list, id_field=id_field)
+    fp_a = bundle_fingerprint(
+        a_list, id_field=id_field, duplicate_mode=duplicate_mode,
+    )
+    fp_b = bundle_fingerprint(
+        b_list, id_field=id_field, duplicate_mode=duplicate_mode,
+    )
     if fp_a == fp_b:
         unchanged_count = sum(
             1
