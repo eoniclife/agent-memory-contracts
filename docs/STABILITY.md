@@ -224,10 +224,18 @@ The MCP server lives in the optional
 requires the `fastmcp` package (installed via
 `pip install agent-memory-contracts[mcp]`).
 
+The stable Python surface is the server wrapper, config, and
+entry point below. MCP tool names are integration surface:
+`validate_records_against_schemas`, `validate_bundle_integrity`,
+and `evaluate_access_scope` are the precise tool names;
+`validate_bundle` remains a compatibility alias, while
+`check_access` is shape-compatible with the old response but now
+also enforces the server's configured maximum privacy class.
+
 | Name | Module | Description |
 | --- | --- | --- |
 | `ContractsMCPServer` | `integrations.mcp` | The MCP server class |
-| `MCPConfig` | `integrations.mcp` | Configuration dataclass |
+| `MCPConfig` | `integrations.mcp` | Configuration dataclass, including server-side access cap |
 | `run_server` | `integrations.mcp` | Entry-point function |
 
 ### Decay (v1.1.0)
@@ -393,8 +401,7 @@ with a clear migration note.
 
 ## Schema Policy
 
-The 24 JSON Schemas in
-`src/agent_memory_contracts/schemas/` are at
+The JSON Schemas in `src/agent_memory_contracts/schemas/` are at
 `"1.0.0"` (the `SCHEMA_VERSION` constant in each
 contract module). The schemas are content-stamped: the
 hash of a record's canonical JSON is the record's id.

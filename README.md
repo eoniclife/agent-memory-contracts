@@ -146,7 +146,7 @@ Three runnable end-to-end examples:
 - [`examples/decay.py`](examples/decay.py) -- freshness scoring on a small bundle of facts; first concrete schema migration.
 - [`examples/company_brain_demo.py`](examples/company_brain_demo.py) -- the full 7-stage pipeline (ingest → extract → reduce → cite → access → embed → compile) end to end.
 - [`examples/langchain_memory.py`](examples/langchain_memory.py) -- LangChain `BaseMemory` integration; replace `ConversationBufferMemory()` with `ContractsMemory()`.
-- [`examples/mcp_server.py`](examples/mcp_server.py) -- expose `validate_bundle`, `compile_context`, `check_access` as MCP tools over stdio.
+- [`examples/mcp_server.py`](examples/mcp_server.py) -- expose schema validation, bundle-integrity validation, access-scope evaluation, ContextPack compilation, and compatibility tool aliases over stdio.
 - [`examples/poisoning_demo/run.py`](examples/poisoning_demo/run.py) -- one memory-poisoning attack against two stores: a naive extract-append-retrieve store (silently poisoned) and a contracts-governed store (forgery rejected with a receipt). See [Poisoning demo](#poisoning-demo).
 - [`examples/arthashila_demo/build.py`](examples/arthashila_demo/build.py) -- the real NBFC dataset through the contracts end to end, with the `--runtime` flag running it through the reference runtime. Skips cleanly if the dataset isn't available.
 

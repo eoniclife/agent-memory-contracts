@@ -166,12 +166,15 @@ note the decisions you've taken somewhere persistent" (per
     for many examples. Using FastMCP gives a ~250-LOC
     server instead of a 2000-LOC one.
 
-11. **The server exposes 3 tools, not the full library
-    surface.** 3 tools = `validate_bundle`,
-    `compile_context`, `check_access`. Other functions
-    (fingerprint, diff, merge, hygiene) are client-side
-    operations; they don't need an MCP round-trip. A
-    user with full bundle access can run them locally.
+11. **The server exposes a small tool surface, not the full
+    library surface.** The MCP surface now includes precise
+    schema-validation, bundle-integrity, access-scope, and
+    ContextPack compilation tools, plus compatibility
+    aliases. The old `check_access` tool name is now
+    shape-compatible but server-capped by default. Other
+    functions (fingerprint, diff, merge, hygiene) are
+    client-side operations; they don't need an MCP round-trip.
+    A user with full bundle access can run them locally.
 
 12. **The server does not implement a "store" tool.**
     MCP has a `Store` resource type for read/write

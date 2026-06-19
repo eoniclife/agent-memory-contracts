@@ -1,8 +1,8 @@
 """MCP server example.
 
 This example demonstrates the MCP server integration. By
-default it instantiates the server (which registers three
-tools and 24 JSON Schema resources) and prints a summary of
+default it instantiates the server (which registers six
+tools and the JSON Schema resources) and prints a summary of
 the public surface; the actual server is started with
 ``--serve``.
 
@@ -30,6 +30,9 @@ $ python -m agent_memory_contracts.integrations.mcp
 The server uses stdio for transport, so the JSON-RPC
 messages appear on stdout. A real client consumes those
 messages.
+
+Set ``MCP_MAX_PRIVACY_CLASS`` to cap what the MCP server
+will expose even if a client requests a broader scope.
 """
 
 from __future__ import annotations
@@ -54,7 +57,14 @@ def main() -> None:
 
     # Default: instantiate and summarize the public surface.
     server = ContractsMCPServer(MCPConfig())
-    tools = ["validate_bundle", "compile_context", "check_access"]
+    tools = [
+        "validate_records_against_schemas",
+        "validate_bundle_integrity",
+        "evaluate_access_scope",
+        "validate_bundle",
+        "compile_context",
+        "check_access",
+    ]
     schemas = [
         "candidate_claim", "candidate_decision", "candidate_preference",
         "candidate_task", "candidate_taste_signal", "context_pack",
@@ -69,6 +79,7 @@ def main() -> None:
     print("MCP server registered:")
     print(f"  server name: {server.config.server_name}")
     print(f"  transport:   {server.config.transport}")
+    print(f"  max privacy: {server.config.maximum_privacy_class}")
     print(f"  tools ({len(tools)}): {', '.join(tools)}")
     print(f"  resources: agent-memory-contracts://schemas (list of {len(schemas)})")
     print(f"  resources: agent-memory-contracts://schemas/{{name}} (one per schema)")

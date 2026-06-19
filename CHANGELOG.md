@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   order-dependent. Records already at the target, records missing
   `schema_version`, dataclass records, and older records can appear
   in any order and still migrate independently.
+- MCP tooling now separates record-level JSON Schema validation from
+  cross-record bundle-integrity validation, exposes precise tool
+  aliases, applies a server-side maximum privacy class when evaluating
+  access scopes, and fails closed on unknown privacy classes by default.
 
 ## [1.2.0] - 2026-06-18
 
