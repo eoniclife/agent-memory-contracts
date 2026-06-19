@@ -406,9 +406,10 @@ CREATE TABLE IF NOT EXISTS entry_evidence (
     PRIMARY KEY (tenant_id, entry_id, span_id)
 );
 
--- ADR-6: the audit anchor hash chain. scope is canonical JSON of
--- the record ids + edge keys the fingerprint covers, so
--- verify_chain can recompute every anchor at any later time.
+-- ADR-6: the audit anchor hash chain. scope is stable JSON of the
+-- record ids + edge keys the fingerprint covers, serialized with
+-- legacy scope bytes so verify_chain can recompute every anchor at
+-- any later time.
 CREATE TABLE IF NOT EXISTS audit_anchors (
     seq              INTEGER PRIMARY KEY AUTOINCREMENT,
     tenant_id        TEXT NOT NULL,
