@@ -2,19 +2,17 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from typing import Any
+
+from ._canonical import canonical_json, sha256_hex as _sha256_hex
 
 
 def sha256_hex(value: str | bytes) -> str:
-    if isinstance(value, str):
-        value = value.encode("utf-8")
-    return hashlib.sha256(value).hexdigest()
+    return _sha256_hex(value)
 
 
 def _canonical_json(value: Any) -> str:
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return canonical_json(value)
 
 
 def _prefixed_id(prefix: str, payload: Any, length: int = 24) -> str:

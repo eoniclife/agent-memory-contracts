@@ -49,6 +49,7 @@ import sqlite3
 from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, Sequence
 
+from .._canonical import canonical_json
 from ..bundles import bundle_fingerprint
 from .store import MemoryStore, StoreError
 
@@ -261,7 +262,7 @@ def append_anchor(
         " prev_fingerprint, actor, kind, created_at)"
         " VALUES (?, ?, ?, ?, ?, ?, ?)",
         (store.tenant_id,
-         json.dumps(scope, sort_keys=True, separators=(",", ":")),
+         canonical_json(scope),
          fingerprint, prev, actor, kind, created_at))
     seq = int(cursor.lastrowid or 0)
     return AnchorReceipt(seq=seq, fingerprint=fingerprint, kind=kind)

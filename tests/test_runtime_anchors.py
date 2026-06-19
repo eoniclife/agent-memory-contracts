@@ -27,6 +27,7 @@ from agent_memory_contracts.runtime.anchors import (
     verify_chain,
     verify_coverage,
 )
+from agent_memory_contracts._canonical import canonical_json
 from agent_memory_contracts.runtime.store import MemoryStore, StoreError
 
 from .runtime_seed import T_CREATED, build_universe, seed_anchored
@@ -102,6 +103,8 @@ class ChainHappyPathTests(_AnchoredStoreCase):
                                     created_at=T_CREATED)
             self.store._disarm_guard(conn)
         self.assertEqual(receipt.kind, "verified")
+        self.assertEqual(self.store.list_anchors()[-1]["scope"],
+                         canonical_json(scope))
         result = verify_chain(self.store)
         self.assertTrue(result.ok, result.divergence)
 

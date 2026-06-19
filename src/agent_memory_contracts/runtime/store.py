@@ -77,6 +77,7 @@ from pathlib import Path
 from types import TracebackType
 from typing import Any, Iterator, Protocol, Sequence
 
+from .._canonical import canonical_json as _canonical_json
 from ..access import PRIVACY_CLASS_ORDER
 from ..ledger_contracts import parse_iso8601
 
@@ -175,8 +176,7 @@ def canonical_json(value: Any) -> str:
     """Canonical JSON exactly as the library's id helpers produce it
     (sorted keys, tight separators, non-ASCII preserved). Never
     reimplement canonicalization elsewhere (ADR-1)."""
-    return json.dumps(value, sort_keys=True, separators=(",", ":"),
-                      ensure_ascii=False)
+    return _canonical_json(value)
 
 
 def _loads_dict(payload: str) -> dict[str, Any]:
