@@ -164,6 +164,12 @@ To set expectations:
 - **Not a model-call wrapper.** The contracts describe memory; how
   candidates are produced by an LLM is your problem. The contracts do
   carry `extracted_by` (agent / model / tool / prompt_ref) for audit.
+- **Not a hosted control plane.** The reference runtime makes the
+  semantics executable, but queues, review workflows, tenant policy,
+  adapter enforcement, and service operations belong in a product repo.
+  An optional adapter does not make a whole agent application
+  poisoning-resistant unless the application routes durable trusted
+  memory through the reducer gate.
 - **Not a complete second-brain system.** This is the contract
   surface. The integration, the workers, the substrate, the eval
   bench, and the falsification protocol all live in the upstream
@@ -216,14 +222,20 @@ Additions shipped in v1.x so far:
 - **Schema migration framework** (`MigrationStep`,
   `SchemaMigrator`, `default_migrator`) — the v1.0.0 →
   v1.1.0 step is the first concrete migration.
-- **PyPI publication** — `agent-memory-contracts` is on
-  TestPyPI as of v1.2.0; promotion to real PyPI is held
-  pending external review.
+- **PyPI publication** — `agent-memory-contracts` is published
+  through the repository's trusted-publishing workflow. Release
+  artifacts are checked locally and in CI before a GitHub Release
+  publishes the package.
 
 Future directions:
 
-- **Postgres backend** behind `StorageBackend` (product repo,
-  mapped in `docs/ROADMAP-to-product.md`).
+- **Governed-memory wrapper product** in a separate repo: adapters
+  for existing memory systems, observe/overlay/enforce modes, review
+  queues, trusted-read envelopes, and product telemetry around the
+  trust kernel.
+- **Postgres or hosted backend** behind `StorageBackend` where a
+  service deployment needs it, mapped in
+  `docs/ROADMAP-to-product.md`.
 - **LLM answerer** at the template boundary in
   `runtime.grounding` (the deterministic template is the
   conformance test; the LLM is the product insertion point).

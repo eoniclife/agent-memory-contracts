@@ -6,13 +6,13 @@ suite for any product-side port.
 
 [![CI](https://github.com/eoniclife/agent-memory-contracts/actions/workflows/ci.yml/badge.svg)](https://github.com/eoniclife/agent-memory-contracts/actions/workflows/ci.yml)
 [![mypy](https://github.com/eoniclife/agent-memory-contracts/actions/workflows/ci.yml/badge.svg?job=mypy)](https://github.com/eoniclife/agent-memory-contracts/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-729_passing-brightgreen)](https://github.com/eoniclife/agent-memory-contracts/tree/main/tests)
+[![Tests](https://img.shields.io/badge/tests-845_collected-brightgreen)](https://github.com/eoniclife/agent-memory-contracts/tree/main/tests)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](https://www.python.org/downloads/)
 [![Standard library only](https://img.shields.io/badge/dependencies-none-success)](https://github.com/eoniclife/agent-memory-contracts)
 [![Schemas](https://img.shields.io/badge/JSON_Schemas-23-blue)](https://github.com/eoniclife/agent-memory-contracts/tree/main/src/agent_memory_contracts/schemas)
 [![Public API](https://img.shields.io/badge/public_names-162-blue)](https://github.com/eoniclife/agent-memory-contracts/blob/main/docs/STABILITY.md)
-[![TestPyPI](https://img.shields.io/badge/TestPyPI-v1.2.0-blue)](https://test.pypi.org/project/agent-memory-contracts/)
+[![PyPI](https://img.shields.io/pypi/v/agent-memory-contracts.svg)](https://pypi.org/project/agent-memory-contracts/)
 
 > The core design question this library answers: *if an LLM extracts
 > something from raw sources, how do you keep that extraction from
@@ -77,6 +77,24 @@ This library was extracted from a 30+ sprint falsification-first build
 of a private agent memory kernel. The schemas, id formats, and
 public API are frozen at v1.0.0; subsequent 1.x releases are
 backwards-compatible.
+
+## Stability tiers
+
+`agent-memory-contracts` is a trust kernel, not a hosted product.
+Its public surface is split into three tiers:
+
+- **Stable core.** JSON Schemas, dataclasses, ID helpers,
+  canonicalization, validators, bundle fingerprint/diff/merge,
+  migrations, audit packs, access decisions, and the CLI follow the
+  SemVer policy in [`docs/STABILITY.md`](docs/STABILITY.md).
+- **Reference runtime.** `agent_memory_contracts.runtime` is the
+  executable sqlite3 reference for governed-memory semantics and the
+  conformance target for product-side ports. It is not a production
+  service recommendation.
+- **Optional integrations.** LangChain and MCP extras are adapter-tier
+  surfaces. They make the contracts easier to exercise from existing
+  tools, but they do not by themselves make an agent's whole memory
+  stack poisoning-resistant or enforce governed writes.
 
 ## The six memory planes
 
@@ -145,7 +163,7 @@ Three runnable end-to-end examples:
 - [`examples/conflict_resolution.py`](examples/conflict_resolution.py) -- five worked scenarios: pick-one resolution, merge resolution, split resolution, weekly hygiene report, windowed + diff-augmented hygiene report.
 - [`examples/decay.py`](examples/decay.py) -- freshness scoring on a small bundle of facts; first concrete schema migration.
 - [`examples/company_brain_demo.py`](examples/company_brain_demo.py) -- the full 7-stage pipeline (ingest → extract → reduce → cite → access → embed → compile) end to end.
-- [`examples/langchain_memory.py`](examples/langchain_memory.py) -- LangChain `BaseMemory` integration; replace `ConversationBufferMemory()` with `ContractsMemory()`.
+- [`examples/langchain_memory.py`](examples/langchain_memory.py) -- LangChain `BaseMemory` integration for classic chains; records turns as source/episode/evidence trace and returns a ContextPack-shaped memory variable. It does not promote turns into trusted facts.
 - [`examples/mcp_server.py`](examples/mcp_server.py) -- expose schema validation, bundle-integrity validation, access-scope evaluation, ContextPack compilation, and compatibility tool aliases over stdio.
 - [`examples/poisoning_demo/run.py`](examples/poisoning_demo/run.py) -- one memory-poisoning attack against two stores: a naive extract-append-retrieve store (silently poisoned) and a contracts-governed store (forgery rejected with a receipt). See [Poisoning demo](#poisoning-demo).
 - [`examples/arthashila_demo/build.py`](examples/arthashila_demo/build.py) -- the real NBFC dataset through the contracts end to end, with the `--runtime` flag running it through the reference runtime. Skips cleanly if the dataset isn't available.
@@ -195,7 +213,8 @@ Three runnable end-to-end examples:
   programmatic consumption.
 - **Zero runtime dependencies** (stdlib only)
 - **~17,000 lines of Python**, ~600 lines of JSON Schema
-- **729 tests** (plus 23 subtests, 1 environment-skipped) covering
+- **845 collected tests** (dataset-gated Arthashila cases skip when
+  the external corpus is unavailable) covering
   id derivation, contract validation, bundle integrity, temporal
   queries, the bundle fingerprint, diff, and merge primitives, the
   optional JSON Schema validator, the CLI (including `--json` mode),
@@ -375,9 +394,11 @@ state, anchor chain verified):
 PYTHONPATH=src python examples/arthashila_demo/build.py --runtime --dataset /path/to/05-demo-dataset
 ```
 
-The runtime is the *semantics*, not the service: the product layer
-(Postgres backend behind `runtime.store.StorageBackend`, FastAPI,
-console, MCP wiring) is mapped ADR-by-ADR in
+The runtime is the *semantics*, not the service: product work belongs
+in a separate governed-memory wrapper/control-plane repo. That product
+can port the `StorageBackend`, expose a service API, wrap existing
+memory stores in observe/overlay/enforce modes, and use these
+invariants as its acceptance gate. The map is in
 [`docs/ROADMAP-to-product.md`](docs/ROADMAP-to-product.md).
 
 ## Bundle fingerprint
@@ -512,7 +533,7 @@ Requires Python 3.10+. No runtime dependencies.
 
 ```bash
 pip install -e ".[dev]"
-pytest -q                            # 325 tests
+pytest -q                            # 845 collected tests
 PYTHONPATH=src python examples/quickstart.py
 PYTHONPATH=src python examples/extract_taste_cards.py
 PYTHONPATH=src python examples/reference_reducer.py

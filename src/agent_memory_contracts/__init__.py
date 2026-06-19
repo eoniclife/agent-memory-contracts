@@ -181,7 +181,7 @@ from .compilation import (
     compile_context_pack,
 )
 
-__version__ = "1.2.0"
+__version__ = "1.3.0"
 
 __all__ = [
     # Evidence plane

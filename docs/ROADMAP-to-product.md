@@ -1,9 +1,31 @@
-# ROADMAP: from this reference runtime to the product
+# ROADMAP: from trust kernel to governed-memory product
 
 **Audience:** the engineer (or agent) building the product repo
-("Brainiac" working title) on top of this library.
+on top of this library.
 
-This repository now contains two layers:
+This repository is the trust kernel. The product is a separate
+governed-memory wrapper/control plane for existing agent memory
+systems.
+
+The product direction is:
+
+```text
+Do not ask users to replace memory. Intercept unsafe durable-memory
+writes, keep untrusted material in candidate space, promote only
+through a reducer, and inject trusted highlights with receipts.
+```
+
+The product should expose explicit modes:
+
+- `observe`: native memory is unchanged; the governed layer audits and
+  reports what it would have done.
+- `overlay`: native memory remains available; trusted highlights are
+  added and clearly labelled. No poisoning-resistance claim for the
+  whole agent.
+- `enforce`: ungoverned durable memory cannot enter the trusted context
+  channel. No silent downgrade to overlay.
+
+This repository contains two layers:
 
 1. **The contracts** (`src/agent_memory_contracts/*.py`) — schemas,
    content-derived ids, validators. Frozen surface; the product
@@ -13,18 +35,22 @@ This repository now contains two layers:
    storage, gating, anchoring, and grounding semantics, with the
    ADR-14 invariants executable in `tests/invariants/`.
 
-The runtime is deliberately the *semantics*, not the *service*: the
-product repo wraps it in Postgres, FastAPI, a console, and MCP. The
-table below maps every ADR to what exists here and what remains.
-Treat the invariant suite as the acceptance tests for the port —
-**if an invariant test must be weakened to make a product feature
-pass, stop and escalate.**
+The runtime is deliberately the *semantics*, not the *service*. A
+product may port storage, expose a service API, build a console, or
+ship MCP tools, but those are implementation choices. The first product
+claim is adapter governance: controlling what durable memory becomes
+trusted context when an agent already has a memory stack.
+
+The table below maps every ADR to what exists here and what remains.
+Treat the invariant suite as the acceptance tests for the product port:
+**if an invariant test must be weakened to make a product feature pass,
+stop and escalate.**
 
 ## ADR-by-ADR map
 
 | ADR | What exists in this repo (file / symbol) | What remains for the product repo (implementation note) |
 |---|---|---|
-| **ADR-1** Server is the id authority | `runtime/gate.py` — every `submit_*` and `promote()` recomputes ids by parsing through the contracts classes; `IdMismatchError(expected, got)`; idempotent no-op upserts (`IngestReceipt.created`/`PromoteReceipt.created`) | HTTP mapping only: 400 `id_mismatch` / 200 `created: false`. One exception handler per error class in FastAPI; the gate already produces the structured errors. |
+| **ADR-1** Server is the id authority | `runtime/gate.py` — every `submit_*` and `promote()` recomputes ids by parsing through the contracts classes; `IdMismatchError(expected, got)`; idempotent no-op upserts (`IngestReceipt.created`/`PromoteReceipt.created`) | Product API mapping: 400 `id_mismatch` / 200 `created: false`. The adapter layer must not accept caller-supplied trusted ids without recomputation. |
 | **ADR-2** Immutable payloads + relational edges | `runtime/store.py` — one table per plane (all six planes + `answers`), extracted columns, insert-only edge tables (`supersessions`, `status_overrides`, `decision_authorizations`, `candidate_evidence`, `entry_evidence`), `check_extracted_columns()` drift check | Postgres DDL: translate `_SCHEMA` (JSONB payload, `tsvector` generated column, real indexes); schedule `check_extracted_columns` as the nightly drift job. |
 | **ADR-3** Supersession as an edge, materialized at read | `store.materialize_entry()` (one shared definition for read path and gate closure), `active_ledger` view, time-travel `active_entries(as_of=...)`; `status_overrides` extends the same pattern to retract/contest/archive (deliberate adaptation — the contracts require those statuses; the ADRs didn't enumerate a mechanism) | Port the view + materialization to SQL/SQLAlchemy; keep `materialize_entry` semantics byte-compatible (the invariant suite validates the materialized form against the library validators). |
 | **ADR-4** Validation closure per write | `gate.MemoryGate._validate_closure()` — the 5-step closure run to a fixpoint, hypothetical edge materialization, library errors verbatim; `full_revalidation()` is the global net | Closure load with `SELECT ... FOR SHARE`; map `ValidationRejectedError.errors` to 422 verbatim; cron the nightly `full_revalidation` (it already appends the `verified` anchor). |
@@ -34,10 +60,10 @@ pass, stop and escalate.**
 | **ADR-8** /ask grounding contract | `grounding.answer()` — refusal threshold, structured refusal with `related_candidate_ids`, deterministic template answerer, **mechanical** `verify_grounding()` post-check (degrades to refusal, never to an uncited answer), every answer/refusal persisted with pack fingerprint (`answers` table = the time-travel audit) | Insert the LLM: prompt Claude with the numbered `[Fi]` fact blocks, then run the SAME `verify_grounding` post-check (regenerate once, then degrade — the checker does not care who wrote the sentences). Add `model_id`, `prompt_version`, latency columns. |
 | **ADR-9** Conflict detection | `subject_key` extracted column + index on `candidates` and `ledger_entries` (`store._SCHEMA`); the library's `conflict.py` resolution primitives | The `conflicts` table + same-subject_key flagging at candidate submit; console side-by-side with both evidence chains; resolution through `resolve_conflict`, recorded as decisions. No auto-resolution, ever. |
 | **ADR-10** Proposer contract | Contracts enforce span-backed candidates (`evidence_span_ids` non-empty) and `extracted_by` audit fields; `trust_tier` pattern demonstrated in `examples/arthashila_demo/build.py` (`metadata.trust_tier`, used by the reject kill-chains) | The LLM proposer pipeline: claim schema, normalized-offset spans with `normalization_version`, quote==slice check at submit, `trust_tier` as an extracted column on sources, `auto_reject_floor` as recorded system decisions through `promote()` (reject decisions already flow through the gate). |
-| **ADR-11** MCP tool schemas | `store.search_entries()` returns the exact `search_ledger` output shape (`LedgerSearchHit.to_dict()`); `build_context_pack` / `submit_candidate` provide the other two tools' semantics; existing `integrations/mcp.py` shows the FastMCP wiring pattern | A thin `/mcp` server: three tools calling the service API with a bearer token, zero business logic. Freeze the v1 schemas as written in the ADR. |
-| **ADR-12** Console | Nothing (out of scope for a library, deliberately) | Next.js + React Query against FastAPI; no optimistic updates on decisions; `review_leases` table for the queue state machine; budget real effort on span-highlight evidence rendering — it is the screenshot. |
+| **ADR-11** MCP tool schemas | `store.search_entries()` returns the exact `search_ledger` output shape (`LedgerSearchHit.to_dict()`); `build_context_pack` / `submit_candidate` provide the other two tools' semantics; existing `integrations/mcp.py` shows the FastMCP wiring pattern | A thin MCP adapter: tools call the governed-memory engine or service with explicit observe/overlay/enforce capability reporting, zero hidden business logic. Freeze the v1 schemas as written in the ADR. |
+| **ADR-12** Console | Nothing (out of scope for a library, deliberately) | Review queue + evidence view + mode/capability inspector. No optimistic updates on decisions; budget real effort on span-highlight evidence rendering — it is the screenshot. |
 | **ADR-13** Tenancy, privacy, retention | `tenant_id` on every table, all reads/writes tenant-scoped (`MemoryStore(tenant_id=...)`, isolation tested); privacy clearance filter — entry tier derives from cited evidence, fail-closed (`store._effective_privacy_index`), tested down to "low-clearance pack can never contain a high-tier fact" | Postgres RLS with per-tenant roles (schema needs no change); crypto-shredding: add `content_encrypted` + `key_id` columns on sources/spans, per-source key wrapper, deletion = key destruction (ids + anchor fingerprints survive). |
-| **ADR-14** The differentiator suite | `tests/invariants/` — all five invariants executable, each with positive + adversarial tests, headers in product language; runs in the normal pytest suite | Run the same suite against the Postgres backend in CI on every PR (the suite is the port's acceptance gate); wire the "weakened invariant ⇒ stop and escalate" rule into review policy. |
+| **ADR-14** The differentiator suite | `tests/invariants/` — all five invariants executable, each with positive + adversarial tests, headers in product language; runs in the normal pytest suite | Run the same suite against any product backend or adapter-controlled trusted channel in CI on every PR; wire the "weakened invariant ⇒ stop and escalate" rule into review policy. |
 
 ## Deliberate adaptations (library-pure vs ADR-as-written)
 
@@ -69,11 +95,22 @@ pass, stop and escalate.**
 
 ## Suggested build order for the product repo
 
-1. Postgres `StorageBackend` + gate port; run `tests/invariants/`
-   against it until green (this is most of the risk).
-2. FastAPI service: thin handlers over gate/grounding; error-class
-   to status-code mapping (400/409/422 already structured).
-3. Proposer pipeline (ADR-10) + conflicts (ADR-9).
-4. MCP server (ADR-11) — thin client of the service.
-5. Console (ADR-12).
-6. Phase-3 hardening: RLS, crypto-shredding, off-box anchor head.
+1. Define the adapter contract: `GovernanceMode`,
+   `AdapterCapabilities`, `ExternalMemoryEvent`, `ExternalRef`, and
+   the exact meaning of observe/overlay/enforce.
+2. Build an embedded governed-memory engine using this trust kernel
+   plus a product-local external-ref/event store. Ingest must be
+   idempotent and must preserve the raw native-memory assertion as
+   evidence, not as truth.
+3. Add the reducer policy and review queue. Govern durable assertions,
+   not every transient message; dedupe aggressively and record
+   auto-reject decisions as receipts.
+4. Ship the trusted-read broker:
+   `query_trusted`, `explain`, `audit_verify`, and a receipted
+   `TrustedContextEnvelope`. No model call on the trusted-read hot path.
+5. Build one enforce-capable Python adapter for Mem0/custom stores, with
+   explicit capability reporting and no silent downgrade. Use observe
+   and overlay for systems the adapter cannot truly constrain.
+6. Add hosted/service surfaces only after the embedded adapter proves the
+   governance loop: API, MCP, console, tenancy, RLS, crypto-shredding,
+   and off-box anchor-head publication.

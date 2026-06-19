@@ -1,12 +1,12 @@
 # Migration guide: from SQLite-style memory to the contracts library
 
-> **Current at v1.2.0.** The library has a complete reference
+> **Current at v1.3.0.** The library has a complete reference
 > runtime (`agent_memory_contracts.runtime`, sqlite3,
 > stdlib-only) that already implements every step described
 > in this guide. If you only want to move data, you can
 > either adopt the reference runtime directly or read
 > [`docs/ROADMAP-to-product.md`](ROADMAP-to-product.md) for
-> the product-port seam. This guide is for teams that
+> the governed-memory wrapper/product seam. This guide is for teams that
 > already have a SQLite-shaped memory store and want to
 > adopt the contracts layer in front of it.
 

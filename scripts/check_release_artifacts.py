@@ -44,6 +44,7 @@ SDIST_REQUIRED_PATHS = (
     "docs/architecture.md",
     "docs/STABILITY.md",
     "docs/RELEASE-v1.2.0.md",
+    "docs/RELEASE-v1.3.0.md",
     "docs/specs/sprint_28_audit_and_runtime.md",
     "examples/quickstart.py",
     "examples/reference_reducer.py",

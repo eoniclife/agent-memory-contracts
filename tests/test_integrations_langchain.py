@@ -62,6 +62,35 @@ class TestSaveAndLoad(unittest.TestCase):
         self.assertEqual(len(cp["evidence"]), 2)  # input + output
         self.assertEqual(len(cp["sources"]), 1)
 
+    def test_save_context_records_session_trace_not_trusted_facts(self) -> None:
+        m = ContractsMemory(session_id="sess-trace")
+        m.save_context({"input": "Hi"}, {"response": "Hello!"})
+
+        records = m.store.get_merged(m.session_id)
+
+        self.assertTrue(any(r.get("episode_type") == "turn" for r in records))
+        self.assertEqual(
+            sum(1 for r in records if r.get("episode_id") is not None),
+            2,
+        )
+        self.assertFalse(any("ledger_type" in r for r in records))
+        self.assertFalse(any("reducer_decision_id" in r for r in records))
+        self.assertFalse(any("decision_type" in r for r in records))
+
+    def test_configured_privacy_class_applies_to_generated_trace(self) -> None:
+        cfg = ContractsMemoryConfig(privacy_class="private")
+        m = ContractsMemory(session_id="sess-private", config=cfg)
+        m.save_context({"input": "Hi"}, {"response": "Hello!"})
+
+        records = m.store.get_merged(m.session_id)
+        classified = [
+            r["privacy_class"]
+            for r in records
+            if r.get("source_type") == "conversation" or r.get("episode_id") is not None
+        ]
+
+        self.assertEqual(classified, ["private", "private", "private"])
+
     def test_two_turns_yield_two_records(self) -> None:
         m = ContractsMemory(session_id="sess2")
         m.save_context({"input": "Q1"}, {"response": "A1"})

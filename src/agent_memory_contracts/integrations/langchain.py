@@ -8,19 +8,21 @@ To use it, install the optional ``[langchain]`` extra:
 The integration exposes three public names:
 
 - :class:`ContractsMemory` — a ``BaseMemory`` subclass that
-  treats each conversation turn as an EpisodeRecord and compiles
-  the bundle into a ContextPack on read.
+  treats each conversation turn as an EpisodeRecord plus input/output
+  EvidenceSpan records and returns a ContextPack-shaped session trace
+  on read.
 - :class:`MemoryStore` — an in-memory, session-indexed bundle
   store with a soft ``max_bundles`` eviction policy.
 - :class:`ContractsMemoryConfig` — configuration: privacy class,
-  scope factory name, max_bundles, and per-turn reducer
-  metadata.
+  max_bundles, max_records_per_load, and build-receipt metadata.
 
-The integration is a thin shim around the v1.0.0 library. It
-maps LangChain's "input + output" shape onto the library's
-"source + episode + evidence" shape. The bundle is the
-single source of truth; the ContextPack compiler handles
-selection, scoping, and source coverage enforcement on read.
+The integration is a thin shim around the v1.x library. It maps
+LangChain's "input + output" shape onto the library's
+"source + episode + evidence" shape. It does not promote conversation
+turns into trusted ledger facts, run the reducer, or claim end-to-end
+poisoning resistance for a LangChain application. Product code that
+needs trusted memory should pass extracted candidates through the
+library/runtime reducer path before serving them as facts.
 """
 
 from __future__ import annotations
@@ -72,12 +74,12 @@ class ContractsMemoryConfig:
     ``ContractsMemory()`` with no arguments.
 
     Attributes:
-        privacy_class: The maximum privacy class visible in
-            the compiled context_pack. Defaults to
-            ``"internal"`` (most chains are for internal
-            tooling). Use ``"public"`` for public-facing
-            chains, ``"private"`` for chains that should see
-            all records up to and including ``"private"``.
+        privacy_class: The privacy class assigned to the
+            SourceRecord and EvidenceSpan records generated
+            for conversation turns. Defaults to ``"internal"``
+            (most chains are for internal tooling). Use
+            ``"public"`` for public-facing traces and
+            ``"private"`` for private application traces.
         max_bundles: Soft cap on the number of bundles per
             session. When exceeded, the oldest bundle is
             evicted. Defaults to 100.
@@ -226,7 +228,11 @@ def _hash_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def _session_source(session_id: str) -> dict[str, Any]:
+def _session_source(
+    session_id: str,
+    *,
+    privacy_class: PrivacyClassStr,
+) -> dict[str, Any]:
     """Build a SourceRecord dict for a session.
 
     One source per session. The session id is the
@@ -249,7 +255,7 @@ def _session_source(session_id: str) -> dict[str, Any]:
         observed_at=_now_iso(),
         author_or_sender=None,
         participants=["user", "assistant"],
-        privacy_class="internal",
+        privacy_class=privacy_class,
         custody_status="parsed",
         parser_version="1.0.0",
         metadata={},
@@ -264,6 +270,7 @@ def _turn_records(
     inputs: dict[str, Any],
     outputs: dict[str, Any],
     source_dict: dict[str, Any],
+    privacy_class: PrivacyClassStr,
 ) -> dict[str, Any]:
     """Build the records for one save_context call.
 
@@ -317,7 +324,7 @@ def _turn_records(
         text_excerpt=input_text,
         excerpt_policy="verbatim",
         span_hash_sha256=_hash_text(input_text),
-        privacy_class="internal",
+        privacy_class=privacy_class,
         metadata={},
     )
     output_span = EvidenceSpan(
@@ -329,7 +336,7 @@ def _turn_records(
         text_excerpt=output_text,
         excerpt_policy="verbatim",
         span_hash_sha256=_hash_text(output_text),
-        privacy_class="internal",
+        privacy_class=privacy_class,
         metadata={},
     )
 
@@ -425,13 +432,12 @@ if _LANGCHAIN_BASE_MEMORY is not None:
 
         Each call to :meth:`save_context` records the turn as
         an ``EpisodeRecord`` with two evidence spans (input,
-        output) and a ``FactLedgerEntry`` authorized by a
-        ``MemoryReducerDecision``.
+        output). It does not write trusted ledger entries or
+        reducer decisions.
 
-        Each call to :meth:`load_memory_variables` compiles
-        a ``ContextPack`` for the session using the library's
-        compiler. The compiled context_pack is the memory
-        variable; chains reference it via
+        Each call to :meth:`load_memory_variables` returns a
+        ContextPack-shaped session trace. The context_pack is
+        the memory variable; chains reference it via
         ``memory_variables=["context_pack"]``.
 
         Example:
@@ -536,7 +542,10 @@ if _LANGCHAIN_BASE_MEMORY is not None:
                 None,
             )
             if existing_source is None:
-                source = _session_source(self.session_id)
+                source = _session_source(
+                    self.session_id,
+                    privacy_class=self.config.privacy_class,
+                )
             else:
                 source = existing_source
             source_id = source["id"]
@@ -547,6 +556,7 @@ if _LANGCHAIN_BASE_MEMORY is not None:
                 inputs=inputs,
                 outputs=outputs,
                 source_dict=source,
+                privacy_class=self.config.privacy_class,
             )
             self.store.put(self.session_id, turn_bundle)
 
