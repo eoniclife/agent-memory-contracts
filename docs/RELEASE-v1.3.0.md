@@ -24,6 +24,9 @@ separate governed-memory wrapper/control-plane repo.
   or return a full `ContextPack` record.
 - `ContractsMemoryConfig.privacy_class` is now applied to generated
   source/span trace records, and shared-session privacy conflicts fail closed.
+- Shared-store writers for the same LangChain session now allocate turn
+  indices from the store, preventing distinct adapters from silently reusing
+  episode/span ids for different turns.
 - Public docs now define three stability tiers: stable core, reference
   runtime, and optional integrations.
 - Package metadata now uses modern SPDX license fields for cleaner release

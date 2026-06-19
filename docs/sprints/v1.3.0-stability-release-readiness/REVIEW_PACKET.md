@@ -33,6 +33,9 @@ Changes:
 - apply `ContractsMemoryConfig.privacy_class` to generated SourceRecord and
   EvidenceSpan records and fail closed when two shared-session adapters use
   conflicting privacy classes;
+- allocate LangChain turn indices from the shared `MemoryStore`, so two
+  adapters writing the same session do not generate duplicate episode/span ids
+  and then lose the second turn during merge de-duplication;
 - repair the documented top-level bundle-diff API by exporting
   `BundleDiff` and `bundle_diff` from `agent_memory_contracts`;
 - add regression coverage for LangChain trace-vs-ledger behavior and privacy
@@ -71,14 +74,14 @@ Run on Python 3.12.12 in `/tmp/amc-release-check-venv312` before PR:
 
 ```bash
 /tmp/amc-release-check-venv312/bin/python -m pytest -q tests/test_integrations_langchain.py
-# 24 passed
+# 25 passed
 
 /tmp/amc-release-check-venv312/bin/python -m pytest -q
 # pass; expected Arthashila dataset-gated skips and the jsonschema-installed
 # missing-path skip
 
 /tmp/amc-release-check-venv312/bin/python -m pytest --collect-only -q
-# 848 collected tests
+# 849 collected tests
 
 /tmp/amc-release-check-venv312/bin/python -m mypy src/agent_memory_contracts
 # Success: no issues found in 39 source files
@@ -104,6 +107,9 @@ Fix-pass after independent review:
   conversation/turn/verbatim-shaped pseudo-records;
 - made invalid `ContractsMemoryConfig.privacy_class` values fail closed;
 - made shared-store/shared-session privacy conflicts fail closed;
+- made shared-store/shared-session turn allocation store-scoped so two
+  adapters cannot silently overwrite a distinct turn by generating duplicate
+  episode/span ids;
 - changed the returned LangChain `context_pack` value wording and tests so it
   is treated as a legacy session-trace envelope, not a full `ContextPack`;
 - exported the documented top-level `BundleDiff` / `bundle_diff` names;
@@ -116,8 +122,9 @@ Fix-pass after independent review:
   spec so it matches `langchain_classic.base_memory`;
 - replaced the unresolved release-provenance placeholder with a release-tag
   provenance statement;
-- reran targeted LangChain tests, mypy, API audit, compileall, diff check, and
-  release artifact verification before pushing the fix-pass head.
+- reran targeted LangChain tests, full pytest, mypy, API audit, compileall,
+  diff check, and release artifact verification before pushing the fix-pass
+  head.
 
 ## Reviewer Questions
 

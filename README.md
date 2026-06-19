@@ -6,7 +6,7 @@ suite for any product-side port.
 
 [![CI](https://github.com/eoniclife/agent-memory-contracts/actions/workflows/ci.yml/badge.svg)](https://github.com/eoniclife/agent-memory-contracts/actions/workflows/ci.yml)
 [![mypy](https://github.com/eoniclife/agent-memory-contracts/actions/workflows/ci.yml/badge.svg?job=mypy)](https://github.com/eoniclife/agent-memory-contracts/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-848_collected-brightgreen)](https://github.com/eoniclife/agent-memory-contracts/tree/main/tests)
+[![Tests](https://img.shields.io/badge/tests-849_collected-brightgreen)](https://github.com/eoniclife/agent-memory-contracts/tree/main/tests)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](https://www.python.org/downloads/)
 [![Standard library only](https://img.shields.io/badge/dependencies-none-success)](https://github.com/eoniclife/agent-memory-contracts)
@@ -213,7 +213,7 @@ Three runnable end-to-end examples:
   programmatic consumption.
 - **Zero runtime dependencies** (stdlib only)
 - **~17,000 lines of Python**, ~600 lines of JSON Schema
-- **848 collected tests** (dataset-gated Arthashila cases skip when
+- **849 collected tests** (dataset-gated Arthashila cases skip when
   the external corpus is unavailable) covering
   id derivation, contract validation, bundle integrity, temporal
   queries, the bundle fingerprint, diff, and merge primitives, the

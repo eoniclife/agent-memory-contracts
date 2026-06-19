@@ -56,7 +56,9 @@ v1.2.0; no schema migration required.
   promote turns into trusted facts, run a reducer, or return a full
   `ContextPack` record. Generated source/span privacy now honors
   `ContractsMemoryConfig.privacy_class`, and shared-session privacy conflicts
-  fail closed.
+  fail closed. Shared-store writers for the same session now allocate turn
+  indices from the store so distinct adapters cannot silently reuse
+  episode/span ids.
 - The README badge now points at the live PyPI package version instead of a
   static TestPyPI release marker.
 - Packaging metadata now uses the SPDX `license` string and `license-files`

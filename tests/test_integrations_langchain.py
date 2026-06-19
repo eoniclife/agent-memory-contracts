@@ -219,6 +219,26 @@ class TestMemoryStore(unittest.TestCase):
         result = m2.load_memory_variables({"input": "followup"})
         self.assertEqual(len(result["context_pack"]["records"]), 1)
 
+    def test_shared_store_writes_allocate_distinct_turns(self) -> None:
+        store = MemoryStore()
+        m1 = ContractsMemory(session_id="shared-turns", store=store)
+        m2 = ContractsMemory(session_id="shared-turns", store=store)
+
+        m1.save_context({"input": "Q1"}, {"response": "A1"})
+        m2.save_context({"input": "Q2"}, {"response": "A2"})
+
+        cp = m1.load_memory_variables({"input": "followup"})["context_pack"]
+        self.assertEqual(len(cp["records"]), 2)
+        self.assertEqual(len(cp["evidence"]), 4)
+        self.assertEqual(
+            [record["metadata"]["turn_index"] for record in cp["records"]],
+            [0, 1],
+        )
+        self.assertEqual(
+            [span["text_excerpt"] for span in cp["evidence"]],
+            ["Q1", "{'response': 'A1'}", "Q2", "{'response': 'A2'}"],
+        )
+
     def test_shared_store_rejects_privacy_class_conflict(self) -> None:
         store = MemoryStore()
         m1 = ContractsMemory(

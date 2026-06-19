@@ -34,7 +34,7 @@ import time
 import uuid
 from collections import deque
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Iterator, Literal
 
 # The integration is gated on langchain-classic. If it is not
 # installed, the import of ContractsMemory raises ImportError.
@@ -136,6 +136,7 @@ class MemoryStore:
 
     max_bundles: int = 100
     _bundles: dict[str, deque[dict[str, Any]]] = field(default_factory=dict)
+    _turn_indices: dict[str, int] = field(default_factory=dict)
 
     def put(self, session_id: str, bundle: dict[str, Any]) -> None:
         """Append a bundle to the session's deque.
@@ -145,6 +146,21 @@ class MemoryStore:
         """
         bundles = self._bundles.setdefault(session_id, deque(maxlen=self.max_bundles))
         bundles.append(bundle)
+        self._advance_turn_index_from_bundle(session_id, bundle)
+
+    def next_turn_index(self, session_id: str) -> int:
+        """Allocate the next turn index for a session.
+
+        The counter lives on the shared store, not on a
+        ``ContractsMemory`` instance, so two memory objects writing
+        the same shared session cannot silently generate the same
+        episode/span ids.
+        """
+        if session_id not in self._turn_indices:
+            self._turn_indices[session_id] = self._infer_next_turn_index(session_id)
+        turn_index = self._turn_indices[session_id]
+        self._turn_indices[session_id] = turn_index + 1
+        return turn_index
 
     def get_all(self, session_id: str) -> list[dict[str, Any]]:
         """Return all bundles for a session, in append order."""
@@ -169,10 +185,32 @@ class MemoryStore:
     def clear_session(self, session_id: str) -> None:
         """Remove all bundles for a session."""
         self._bundles.pop(session_id, None)
+        self._turn_indices.pop(session_id, None)
 
     def session_count(self) -> int:
         """Return the number of sessions in the store."""
         return len(self._bundles)
+
+    def _infer_next_turn_index(self, session_id: str) -> int:
+        """Infer a counter from already-stored turn metadata."""
+        max_seen = -1
+        for bundle in self.get_all(session_id):
+            max_seen = max(max_seen, _max_turn_index_in_bundle(bundle))
+        return max_seen + 1
+
+    def _advance_turn_index_from_bundle(
+        self,
+        session_id: str,
+        bundle: dict[str, Any],
+    ) -> None:
+        """Keep the counter ahead of manually inserted bundles."""
+        max_seen = _max_turn_index_in_bundle(bundle)
+        if max_seen < 0:
+            return
+        self._turn_indices[session_id] = max(
+            self._turn_indices.get(session_id, 0),
+            max_seen + 1,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -200,20 +238,44 @@ def _empty_bundle() -> dict[str, Any]:
     return {plane: [] for plane in _BUNDLE_PLANES}
 
 
+def _iter_bundle_records(bundle: Any) -> Iterator[dict[str, Any]]:
+    """Yield records from a bundle-shaped dict or legacy flat list."""
+    if isinstance(bundle, list):
+        for record in bundle:
+            if isinstance(record, dict):
+                yield record
+        return
+    if not isinstance(bundle, dict):
+        return
+    for plane in _BUNDLE_PLANES:
+        for record in bundle.get(plane, []):
+            if isinstance(record, dict):
+                yield record
+
+
+def _max_turn_index_in_bundle(bundle: Any) -> int:
+    """Return the largest integer turn_index found in bundle metadata."""
+    max_seen = -1
+    for record in _iter_bundle_records(bundle):
+        turn_index = record.get("metadata", {}).get("turn_index")
+        if isinstance(turn_index, int):
+            max_seen = max(max_seen, turn_index)
+    return max_seen
+
+
 def _merge_bundles(bundles: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Merge N dict-of-plane-lists bundles into a flat list of records."""
     merged: list[dict[str, Any]] = []
     seen: set[str] = set()
     for bundle in bundles:
-        for plane in _BUNDLE_PLANES:
-            for record in bundle.get(plane, []):
-                rid = record.get("id")
-                if rid is None:
-                    continue
-                if rid in seen:
-                    continue
-                seen.add(rid)
-                merged.append(record)
+        for record in _iter_bundle_records(bundle):
+            rid = record.get("id")
+            if rid is None:
+                continue
+            if rid in seen:
+                continue
+            seen.add(rid)
+            merged.append(record)
     return merged
 
 
@@ -551,10 +613,10 @@ if _LANGCHAIN_BASE_MEMORY is not None:
             self, inputs: dict[str, Any], outputs: dict[str, str]
         ) -> None:
             """Record a turn as an EpisodeRecord plus evidence spans."""
-            turn_index = self._turn_index
-            self._turn_index += 1
             # Build (or fetch) the session source.
             existing = self.store.get_merged(self.session_id)
+            turn_index = self.store.next_turn_index(self.session_id)
+            self._turn_index = turn_index + 1
             existing_source = next(
                 (
                     r for r in existing
