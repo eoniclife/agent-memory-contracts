@@ -196,6 +196,15 @@ class TestAccessScopeHelper(unittest.TestCase):
         )
         self.assertEqual(result["summary"]["dropped"], 1)
         self.assertIn("fail_closed_unknown_privacy", result["decisions"][0]["reason"])
+        self.assertEqual(
+            result["decisions"][0]["reason_code"],
+            "unknown_privacy_class",
+        )
+        self.assertEqual(result["decisions"][0]["privacy_class"], "classified")
+        self.assertEqual(
+            result["summary"]["by_reason_code"],
+            {"unknown_privacy_class": 1},
+        )
 
     def test_malformed_allowed_record_types_fails_closed(self) -> None:
         with self.assertRaises(ValueError):

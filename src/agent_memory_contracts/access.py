@@ -139,12 +139,18 @@ class AccessDecision:
 
     The :attr:`reason` is a human-readable English string,
     suitable for product UIs and audit logs. Programmatic
-    branching should use :attr:`action`, not :attr:`reason`.
+    branching should use :attr:`action` and :attr:`reason_code`,
+    not parse :attr:`reason`.
     """
 
     record_id: str
     action: Literal["allow", "redact", "drop"]
     reason: str
+    reason_code: str = "unspecified"
+    privacy_class: str | None = None
+    max_privacy_class: str | None = None
+    record_type: str | None = None
+    allowed_record_types: tuple[str, ...] | None = None
 
     def __repr__(self) -> str:
         return f"AccessDecision({self.record_id!r}: {self.action} - {self.reason})"
@@ -168,6 +174,7 @@ class AccessSummary:
     dropped: int
     by_privacy_class: Mapping[str, int] = field(default_factory=dict)
     by_action: Mapping[str, int] = field(default_factory=dict)
+    by_reason_code: Mapping[str, int] = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -276,16 +283,27 @@ def check_access(record: Any, scope: BundleScope) -> AccessDecision:
     pc = _record_privacy_class(record)
     pc_index = _privacy_class_index(pc)
     max_index = _privacy_class_index(scope.max_privacy_class)
+    rt = _record_type_string(record)
+    record_type = rt or None
+    allowed_record_types = (
+        tuple(sorted(scope.allowed_record_types))
+        if scope.allowed_record_types is not None
+        else None
+    )
 
     if pc_index > max_index:
         return AccessDecision(
             record_id=rid,
             action="drop",
             reason=f"privacy_class={pc} > max={scope.max_privacy_class}",
+            reason_code="privacy_exceeds_scope",
+            privacy_class=pc,
+            max_privacy_class=scope.max_privacy_class,
+            record_type=record_type,
+            allowed_record_types=allowed_record_types,
         )
 
     if scope.allowed_record_types is not None:
-        rt = _record_type_string(record)
         if rt and rt not in scope.allowed_record_types:
             return AccessDecision(
                 record_id=rid,
@@ -294,12 +312,22 @@ def check_access(record: Any, scope: BundleScope) -> AccessDecision:
                     f"record_type={rt} not in "
                     f"allowed_record_types={sorted(scope.allowed_record_types)}"
                 ),
+                reason_code="record_type_not_allowed",
+                privacy_class=pc,
+                max_privacy_class=scope.max_privacy_class,
+                record_type=record_type,
+                allowed_record_types=allowed_record_types,
             )
 
     return AccessDecision(
         record_id=rid,
         action="allow",
         reason=f"privacy_class={pc} <= max={scope.max_privacy_class}",
+        reason_code="privacy_allowed",
+        privacy_class=pc,
+        max_privacy_class=scope.max_privacy_class,
+        record_type=record_type,
+        allowed_record_types=allowed_record_types,
     )
 
 
@@ -345,12 +373,10 @@ def summarize_access(decisions: Iterable[AccessDecision]) -> AccessSummary:
 
     Returns:
         An :class:`AccessSummary` with counts per action and
-        per privacy class. The ``by_privacy_class`` field
-        is always populated from the ``reason`` strings
-        (parsing ``"privacy_class=X <= max=Y"`` or
-        ``"privacy_class=X > max=Y"``); records whose
-        reason has no privacy class are not counted in
-        ``by_privacy_class``.
+        per privacy class. For current :func:`check_access`
+        decisions, ``by_privacy_class`` and ``by_reason_code`` use
+        structured fields. For legacy manually constructed decisions,
+        privacy class counting falls back to the old ``reason`` parser.
     """
     decisions_list = list(decisions)
     total = len(decisions_list)
@@ -360,14 +386,21 @@ def summarize_access(decisions: Iterable[AccessDecision]) -> AccessSummary:
     by_action: dict[str, int] = {}
     for d in decisions_list:
         by_action[d.action] = by_action.get(d.action, 0) + 1
-    # Count by privacy class by parsing the reason. The reason
-    # format is documented and stable: "privacy_class=X <= max=Y"
-    # or "privacy_class=X > max=Y" or
-    # "record_type=... not in allowed_record_types" (no
-    # privacy class in the reason for type-filtered records,
-    # so they are not counted in by_privacy_class).
+    by_reason_code: dict[str, int] = {}
+    for d in decisions_list:
+        by_reason_code[d.reason_code] = by_reason_code.get(d.reason_code, 0) + 1
+
     by_privacy_class: dict[str, int] = {}
     for d in decisions_list:
+        if d.privacy_class is not None:
+            by_privacy_class[d.privacy_class] = (
+                by_privacy_class.get(d.privacy_class, 0) + 1
+            )
+            continue
+
+        # Legacy fallback for decisions manually constructed before
+        # structured fields existed. The reason format is documented:
+        # "privacy_class=X <= max=Y" or "privacy_class=X > max=Y".
         reason = d.reason
         marker = "privacy_class="
         if marker in reason:
@@ -388,6 +421,7 @@ def summarize_access(decisions: Iterable[AccessDecision]) -> AccessSummary:
         dropped=dropped,
         by_privacy_class=dict(by_privacy_class),
         by_action=dict(by_action),
+        by_reason_code=dict(by_reason_code),
     )
 
 

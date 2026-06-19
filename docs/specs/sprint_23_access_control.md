@@ -93,6 +93,12 @@ class AccessDecision:
     record_id: str
     action: Literal["allow", "redact", "drop"]
     reason: str  # human-readable explanation
+    # v1.3.0 additive fields:
+    reason_code: str = "unspecified"
+    privacy_class: str | None = None
+    max_privacy_class: str | None = None
+    record_type: str | None = None
+    allowed_record_types: tuple[str, ...] | None = None
 ```
 
 In v0.9.0, the `redact` action is reserved but never returned
@@ -140,6 +146,7 @@ class AccessSummary:
     dropped: int
     by_privacy_class: Mapping[str, int]  # count per privacy_class for records in the bundle
     by_action: Mapping[str, int]
+    by_reason_code: Mapping[str, int] = field(default_factory=dict)
 ```
 
 Useful for product dashboards ("you tried to share 100 records;
@@ -518,7 +525,8 @@ mandate. Recorded here so the spec stays the source of truth for
 - **Order preservation in `scope_bundle`:** the filtered
   bundle preserves the input order; the decisions list
   matches the input order 1:1.
-- **`AccessDecision.reason` is human-readable English.** No
-  structured codes; the reason is for product UIs and audit
-  logs, not for programmatic branching. Programmatic branching
-  uses `decision.action == "allow"`.
+- **`AccessDecision.reason` remains human-readable English.**
+  v1.3.0 added structured metadata (`reason_code`, privacy class,
+  max privacy class, record type, and allowed record types) so product
+  code no longer needs to parse the reason string. Programmatic
+  branching uses `decision.action` and `decision.reason_code`.

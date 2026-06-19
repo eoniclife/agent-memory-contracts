@@ -164,8 +164,8 @@ audit script `scripts/audit_public_api.py` walks
 | --- | --- | --- |
 | `PRIVACY_CLASS_ORDER` | `access` | Linear order of privacy classes |
 | `BundleScope` | `access` | A scope (max privacy, record-type filter, name) |
-| `AccessDecision` | `access` | Per-record allow/drop/redact decision |
-| `AccessSummary` | `access` | Aggregate counts from decisions |
+| `AccessDecision` | `access` | Per-record allow/drop/redact decision with structured reason metadata |
+| `AccessSummary` | `access` | Aggregate counts from decisions, actions, privacy classes, and reason codes |
 | `check_access` | `access` | Per-record scope check |
 | `scope_bundle` | `access` | Whole-bundle filter |
 | `summarize_access` | `access` | Aggregate decisions into a summary |
@@ -232,7 +232,8 @@ entry point below. MCP tool names are integration surface:
 and `evaluate_access_scope` are the precise tool names;
 `validate_bundle` remains a compatibility alias, while
 `check_access` is shape-compatible with the old response but now
-also enforces the server's configured maximum privacy class.
+also enforces the server's configured maximum privacy class and
+emits structured access-decision fields.
 
 | Name | Module | Description |
 | --- | --- | --- |

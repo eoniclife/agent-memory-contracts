@@ -448,11 +448,28 @@ def _record_id_for_mcp(record: Any) -> str:
     return str(getattr(record, "id", "<missing>"))
 
 
-def _decision_to_dict(decision: AccessDecision) -> dict[str, str]:
+def _record_privacy_for_mcp(record: Any) -> str | None:
+    if isinstance(record, dict):
+        value = record.get("privacy_class")
+    else:
+        value = getattr(record, "privacy_class", None)
+    return value if isinstance(value, str) else None
+
+
+def _decision_to_dict(decision: AccessDecision) -> dict[str, Any]:
     return {
         "record_id": decision.record_id,
         "action": decision.action,
         "reason": decision.reason,
+        "reason_code": decision.reason_code,
+        "privacy_class": decision.privacy_class,
+        "max_privacy_class": decision.max_privacy_class,
+        "record_type": decision.record_type,
+        "allowed_record_types": (
+            list(decision.allowed_record_types)
+            if decision.allowed_record_types is not None
+            else None
+        ),
     }
 
 
@@ -476,6 +493,9 @@ def _evaluate_access_scope(
                     record_id=_record_id_for_mcp(record),
                     action="drop",
                     reason=f"fail_closed_unknown_privacy: {exc}",
+                    reason_code="unknown_privacy_class",
+                    privacy_class=_record_privacy_for_mcp(record),
+                    max_privacy_class=scope_obj.max_privacy_class,
                 )
             decisions.append(decision)
             if decision.action == "allow":
@@ -499,6 +519,9 @@ def _evaluate_access_scope(
             "allowed": summary.allowed,
             "redacted": summary.redacted,
             "dropped": summary.dropped,
+            "by_privacy_class": dict(summary.by_privacy_class),
+            "by_action": dict(summary.by_action),
+            "by_reason_code": dict(summary.by_reason_code),
         },
     }
 
