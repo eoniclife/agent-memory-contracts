@@ -22,22 +22,14 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install build tool
-        run: python -m pip install --upgrade pip build
-
-      - name: Build distributions
-        run: python -m build
-
-      - name: Verify wheel contains py.typed
+      - name: Install package + release deps
         run: |
-          python -c "
-          import zipfile, sys
-          wheel = [f for f in __import__('pathlib').Path('dist').glob('*.whl')][0]
-          with zipfile.ZipFile(wheel) as z:
-              assert any('py.typed' in n for n in z.namelist()), 'py.typed missing from wheel'
-              assert sum(1 for n in z.namelist() if n.endswith('.schema.json')) == 23, 'expected 23 schemas'
-          print('wheel verified:', wheel.name)
-          "
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Build and verify distributions
+        run: |
+          python scripts/check_release_artifacts.py --run-sdist-tests --run-examples
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
