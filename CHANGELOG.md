@@ -25,7 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `allowed_record_types`) while preserving the human-readable `reason` string.
   The new metadata fields preserve existing dataclass equality/hash comparisons.
   `AccessSummary` now includes `by_reason_code`, and MCP access evaluation
-  serializes the structured decision and summary fields.
+  serializes the structured decision and summary fields. Dict access decisions
+  now use stable record-type names, and MCP plane-organized records use their
+  bundle plane as a fallback record type.
 
 ### Fixed
 

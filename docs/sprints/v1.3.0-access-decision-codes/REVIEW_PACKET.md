@@ -25,7 +25,12 @@ Changes:
 - add `AccessSummary.by_reason_code`;
 - make `summarize_access` prefer structured decision fields and fall back to
   the legacy `reason` parser for manually constructed old-style decisions;
+- normalize dict discriminator values to stable record-type names such as
+  `fact_ledger_entry` and `candidate_claim`;
 - serialize the structured fields from MCP `evaluate_access_scope`;
+- use MCP bundle-plane names as a record-type fallback when records omit their
+  own discriminator fields, so `allowed_record_types` cannot be bypassed by
+  under-specified plane records;
 - include structured summary maps in MCP access results.
 
 ## Non-Goals
@@ -70,6 +75,11 @@ branching should use `action` and `reason_code`.
 `AccessSummary.by_reason_code` is also excluded from dataclass equality
 comparisons so existing six-field expected summaries remain compatible with
 new structured summaries.
+
+Stable `record_type` metadata uses schema-style names: for example
+`ledger_type="fact"` becomes `fact_ledger_entry`, and
+`candidate_type="claim"` becomes `candidate_claim`. MCP access evaluation also
+uses the bundle plane as a fallback for under-specified dict records.
 
 ## Local Gates
 

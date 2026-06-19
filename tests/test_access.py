@@ -228,6 +228,48 @@ class TestCheckAccess(unittest.TestCase):
         d = check_access(record, scope)
         self.assertEqual(d.action, "allow")
 
+    def test_dict_ledger_record_uses_stable_record_type(self) -> None:
+        record = {
+            "id": "fact_dict_1",
+            "schema_version": "1.0.0",
+            "privacy_class": "internal",
+            "ledger_type": "fact",
+        }
+        allow_scope = BundleScope(
+            max_privacy_class="internal",
+            allowed_record_types=frozenset({"fact_ledger_entry"}),
+            name="facts-only",
+        )
+        allow_decision = check_access(record, allow_scope)
+        self.assertEqual(allow_decision.action, "allow")
+        self.assertEqual(allow_decision.record_type, "fact_ledger_entry")
+
+        drop_scope = BundleScope(
+            max_privacy_class="internal",
+            allowed_record_types=frozenset({"source_record"}),
+            name="sources-only",
+        )
+        drop_decision = check_access(record, drop_scope)
+        self.assertEqual(drop_decision.action, "drop")
+        self.assertEqual(drop_decision.reason_code, "record_type_not_allowed")
+        self.assertEqual(drop_decision.record_type, "fact_ledger_entry")
+
+    def test_dict_candidate_record_uses_stable_record_type(self) -> None:
+        record = {
+            "id": "cand_dict_1",
+            "schema_version": "1.0.0",
+            "privacy_class": "internal",
+            "candidate_type": "claim",
+        }
+        scope = BundleScope(
+            max_privacy_class="internal",
+            allowed_record_types=frozenset({"candidate_claim"}),
+            name="claims-only",
+        )
+        d = check_access(record, scope)
+        self.assertEqual(d.action, "allow")
+        self.assertEqual(d.record_type, "candidate_claim")
+
     def test_decision_is_access_decision(self) -> None:
         src = _build_source("public", "1")
         scope = team_scope()

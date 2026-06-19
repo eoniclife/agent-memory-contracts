@@ -120,6 +120,11 @@ default). A record without a discriminator field that
 `allowed_record_types` can match is allowed (record-type
 filtering is opt-in, not opt-out).
 
+Dict discriminator values are normalized to stable schema-style
+record types. For example, `ledger_type="fact"` is surfaced as
+`fact_ledger_entry`, and `candidate_type="claim"` is surfaced as
+`candidate_claim`.
+
 #### `scope_bundle(bundle, scope) -> tuple[Bundle, list[AccessDecision]]`
 
 Whole-bundle filter. Returns a new bundle (list of records)
@@ -536,3 +541,7 @@ mandate. Recorded here so the spec stays the source of truth for
   branching uses `decision.action` and `decision.reason_code`. The
   structured metadata is excluded from dataclass equality/hash
   comparison to preserve old expected-value assertions.
+- **MCP access evaluation uses bundle-plane fallback for record type.**
+  Plane-organized dict records that omit their own discriminator are still
+  evaluated against `allowed_record_types` using the plane's stable record
+  type, so whitelists cannot be bypassed by under-specified MCP input.

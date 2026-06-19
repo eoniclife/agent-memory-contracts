@@ -222,9 +222,11 @@ def _record_type_string(record: Any) -> str:
     """Return a stable record-type string for filtering.
 
     Dataclass records use the class name (snake_cased); dict
-    records use a discriminator field. The result is best-
-    effort; the caller is responsible for passing meaningful
-    values in :attr:`BundleScope.allowed_record_types`.
+    records use discriminator fields and return the same stable
+    record-type strings used by the embedding surface (for example,
+    ``"fact_ledger_entry"`` rather than raw ``ledger_type="fact"``).
+    The result is best-effort; the caller is responsible for passing
+    meaningful values in :attr:`BundleScope.allowed_record_types`.
     """
     if record is None:
         return ""
@@ -239,18 +241,22 @@ def _record_type_string(record: Any) -> str:
             out.append(ch.lower())
         return "".join(out)
     if isinstance(record, Mapping):
-        if "ledger_type" in record:
-            return str(record.get("ledger_type", "ledger_entry"))
-        if "candidate_type" in record:
-            return str(record.get("candidate_type", "candidate"))
         if "source_type" in record:
             return "source_record"
         if "episode_type" in record:
             return "episode_record"
-        if "context_pack_kind" in record or "primary_evidence_span_ids" in record:
-            return "context_pack"
         if "span_hash_sha256" in record:
             return "evidence_span"
+        if "candidate_type" in record:
+            candidate_type = str(record.get("candidate_type", ""))
+            return f"candidate_{candidate_type}" if candidate_type else "candidate"
+        if "ledger_type" in record:
+            ledger_type = str(record.get("ledger_type", ""))
+            return f"{ledger_type}_ledger_entry" if ledger_type else "ledger_entry"
+        if "card_type" in record:
+            return "taste_card"
+        if "context_pack_kind" in record or "primary_evidence_span_ids" in record:
+            return "context_pack"
     return ""
 
 
