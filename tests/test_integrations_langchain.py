@@ -210,6 +210,12 @@ class TestMemoryStore(unittest.TestCase):
         all_bundles = store.get_all("s1")
         self.assertEqual(len(all_bundles), 2)
 
+    def test_max_bundles_must_be_positive(self) -> None:
+        for value in (0, -1, False, "2"):
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(ValueError, "max_bundles"):
+                    MemoryStore(max_bundles=value)  # type: ignore[arg-type]
+
     def test_shared_store_across_memory_instances(self) -> None:
         store = MemoryStore()
         m1 = ContractsMemory(session_id="shared", store=store)
@@ -279,6 +285,20 @@ class TestContractsMemoryConfig(unittest.TestCase):
     def test_invalid_privacy_class_fails_closed(self) -> None:
         with self.assertRaisesRegex(ValueError, "invalid privacy_class"):
             ContractsMemoryConfig(privacy_class="customer")  # type: ignore[arg-type]
+
+    def test_max_bundles_must_be_positive(self) -> None:
+        for value in (0, -1, False, "100"):
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(ValueError, "max_bundles"):
+                    ContractsMemoryConfig(max_bundles=value)  # type: ignore[arg-type]
+
+    def test_max_records_per_load_must_be_positive(self) -> None:
+        for value in (0, -1, False, "20"):
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(ValueError, "max_records_per_load"):
+                    ContractsMemoryConfig(
+                        max_records_per_load=value  # type: ignore[arg-type]
+                    )
 
 
 class TestLangchainCompatibility(unittest.TestCase):

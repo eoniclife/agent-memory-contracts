@@ -12,7 +12,8 @@ The integration exposes three public names:
   EvidenceSpan records and returns a legacy ``context_pack`` memory
   variable containing a session-trace envelope on read.
 - :class:`MemoryStore` — an in-memory, session-indexed bundle
-  store with a soft ``max_bundles`` eviction policy.
+  store with a soft ``max_bundles`` eviction policy. It is not
+  synchronized for concurrent writers.
 - :class:`ContractsMemoryConfig` — configuration: privacy class,
   max_bundles, max_records_per_load, and compatibility-retained
   metadata fields.
@@ -67,6 +68,12 @@ from agent_memory_contracts.evidence_contracts import PRIVACY_CLASSES
 PrivacyClassStr = Literal["public", "internal", "private", "sensitive", "highly_sensitive"]
 
 
+def _validate_positive_int(name: str, value: object) -> None:
+    """Reject non-positive or non-integer numeric configuration."""
+    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+        raise ValueError(f"{name} must be a positive integer; got {value!r}")
+
+
 @dataclass(frozen=True)
 class ContractsMemoryConfig:
     """Configuration for :class:`ContractsMemory`.
@@ -83,10 +90,10 @@ class ContractsMemoryConfig:
             ``"private"`` for private application traces.
         max_bundles: Soft cap on the number of bundles per
             session. When exceeded, the oldest bundle is
-            evicted. Defaults to 100.
+            evicted. Must be a positive integer. Defaults to 100.
         max_records_per_load: Cap on the number of episodes
-            returned by ``load_memory_variables``. Defaults
-            to 20.
+            returned by ``load_memory_variables``. Must be a
+            positive integer. Defaults to 20.
         builder_agent: Compatibility-retained metadata field
             from the earlier adapter draft. The current session-trace
             envelope does not build a receipt.
@@ -113,6 +120,8 @@ class ContractsMemoryConfig:
     def __post_init__(self) -> None:
         if self.privacy_class not in PRIVACY_CLASSES:
             raise ValueError(f"invalid privacy_class: {self.privacy_class!r}")
+        _validate_positive_int("max_bundles", self.max_bundles)
+        _validate_positive_int("max_records_per_load", self.max_records_per_load)
 
 
 @dataclass
@@ -126,17 +135,23 @@ class MemoryStore:
 
     The store is **not** persistent. A v1.1.0+ consideration is
     a file- or DB-backed store; the in-memory form is the
-    simplest thing that can work.
+    simplest thing that can work. It is also not synchronized for
+    concurrent writers; multithreaded applications sharing one
+    store must serialize writes externally or provide a synchronized
+    store implementation.
 
     Attributes:
         max_bundles: Soft cap on the number of bundles per
             session. When exceeded, the oldest bundle is
-            evicted.
+            evicted. Must be a positive integer.
     """
 
     max_bundles: int = 100
     _bundles: dict[str, deque[dict[str, Any]]] = field(default_factory=dict)
     _turn_indices: dict[str, int] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        _validate_positive_int("max_bundles", self.max_bundles)
 
     def put(self, session_id: str, bundle: dict[str, Any]) -> None:
         """Append a bundle to the session's deque.
@@ -152,9 +167,10 @@ class MemoryStore:
         """Allocate the next turn index for a session.
 
         The counter lives on the shared store, not on a
-        ``ContractsMemory`` instance, so two memory objects writing
-        the same shared session cannot silently generate the same
-        episode/span ids.
+        ``ContractsMemory`` instance, so serialized writers sharing
+        a session continue the same sequence instead of each starting
+        at zero. The in-memory store is not synchronized for
+        concurrent writers.
         """
         if session_id not in self._turn_indices:
             self._turn_indices[session_id] = self._infer_next_turn_index(session_id)

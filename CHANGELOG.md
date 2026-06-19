@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- LangChain `ContractsMemoryConfig` and `MemoryStore` now reject zero,
+  negative, boolean, or non-integer limits for `max_bundles` and
+  `max_records_per_load` instead of allowing surprising empty-store or
+  unbounded-load behavior.
+- LangChain `MemoryStore` docs now explicitly state that the in-memory store
+  is not synchronized for concurrent writers; applications sharing a store
+  across threads should serialize writes externally or provide a synchronized
+  store.
+
 ## [1.3.0] - 2026-06-19
 
 The "trust-kernel hardening" release. Tightens the integrity layer before the
