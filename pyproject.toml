@@ -42,6 +42,8 @@ dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
     "mypy>=1.10",
+    "build>=1.2",
+    "twine>=5.0",
 ]
 jsonschema = [
     "jsonschema>=4.0",
@@ -64,6 +66,9 @@ Homepage = "https://github.com/eoniclife/agent-memory-contracts"
 Issues = "https://github.com/eoniclife/agent-memory-contracts/issues"
 Source = "https://github.com/eoniclife/agent-memory-contracts"
 Changelog = "https://github.com/eoniclife/agent-memory-contracts/blob/main/CHANGELOG.md"
+
+[tool.setuptools]
+include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["src"]

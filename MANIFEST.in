@@ -1,0 +1,27 @@
+include README.md
+include CHANGELOG.md
+include LICENSE
+include CODE_OF_CONDUCT.md
+include CONTRIBUTING.md
+include pyproject.toml
+
+graft src
+graft docs
+graft examples
+graft benchmarks
+graft tests
+graft scripts
+
+exclude docs/GPT_PRO_FEEDBACK_WORKPLAN.md
+prune build
+prune dist
+prune .eggs
+prune .mavis
+prune .venv
+prune .venv-*
+prune examples/*/out
+prune examples/poisoning_demo/out
+
+global-exclude __pycache__
+global-exclude *.py[cod]
+global-exclude .DS_Store

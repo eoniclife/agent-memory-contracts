@@ -174,3 +174,24 @@ jobs:
       - name: Run mypy
         run: |
           python -m mypy src/agent_memory_contracts
+
+  release-artifacts:
+    name: release artifacts
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install package + release deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Build and verify wheel + sdist
+        run: |
+          python scripts/check_release_artifacts.py --run-sdist-tests --run-examples
