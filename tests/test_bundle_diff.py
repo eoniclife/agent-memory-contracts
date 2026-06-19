@@ -10,7 +10,7 @@ The diff is set-semantic and content-sensitive, so the tests cover:
 4. Records in b not in a appear in added; in a not in b in removed;
    same id different content in changed.
 5. Duplicate ids with same content are unchanged; same id different
-   content is changed (last-write-wins within a bundle).
+   content is changed under the default last-write-wins mode.
 6. A bundle of dataclasses and an equivalent bundle of dicts diff
    to the same result.
 7. Equal-fingerprint bundles short-circuit (observable as zero
@@ -230,12 +230,19 @@ class DedupByIdTests(unittest.TestCase):
         self.assertEqual(diff.added, [])
         self.assertEqual(len(diff.changed), 1)
 
-    def test_duplicate_mode_first_changes_effective_record(self):
-        a = [_rec(0), dict(_rec(0), value=99)]
+    def test_duplicate_mode_identical_accepts_same_content_duplicate(self):
+        a = [_rec(0), _rec(0)]
         b = [_rec(0)]
-        diff = bundle_diff(a, b, duplicate_mode="first")
+        diff = bundle_diff(a, b, duplicate_mode="identical")
         self.assertEqual(diff.changed, [])
         self.assertEqual(diff.unchanged_count, 1)
+
+    def test_duplicate_mode_identical_rejects_divergent_duplicate(self):
+        with self.assertRaises(DuplicateRecordError) as ctx:
+            bundle_diff([_rec(0), dict(_rec(0), value=99)], [_rec(0)],
+                        duplicate_mode="identical")
+        self.assertEqual(ctx.exception.id_value, "rec_00000000")
+        self.assertFalse(ctx.exception.same_content)
 
     def test_duplicate_mode_raise_rejects_duplicate_in_before(self):
         with self.assertRaises(DuplicateRecordError) as ctx:

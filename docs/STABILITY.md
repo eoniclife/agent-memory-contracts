@@ -345,9 +345,10 @@ After v1.0.0, the library follows [Semantic Versioning](https://semver.org/):
 - **Patch (`1.0.x`):** bug fixes only. No new features, no
   signature changes, no removals.
 - **Minor (`1.x.0`):** new features, backwards compatible.
-  New public names are added; existing public names
-  do not change. A deprecation marker may be added
-  (see Deprecation Policy below).
+  New public names may be added; existing public functions may gain
+  optional keyword-only parameters with backwards-compatible defaults.
+  Existing positional calling conventions do not change. A deprecation
+  marker may be added (see Deprecation Policy below).
 - **Major (`x.0.0`):** breaking changes allowed. Public
   names may be removed or renamed; signatures may
   change. A deprecation cycle is required for any

@@ -366,15 +366,15 @@ class CLIDiffTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("not found", result.stderr)
 
-    def test_diff_duplicate_mode_first_uses_first_duplicate(self):
+    def test_diff_duplicate_mode_identical_accepts_same_duplicate(self):
         a = self._write_json("a.json", [
             {"id": "x", "v": 1},
-            {"id": "x", "v": 2},
+            {"id": "x", "v": 1},
         ])
         b = self._write_json("b.json", [{"id": "x", "v": 1}])
         result = subprocess.run(
             ["python3", "-m", "agent_memory_contracts", "diff",
-             str(a), str(b), "--duplicate-mode", "first"],
+             str(a), str(b), "--duplicate-mode", "identical"],
             capture_output=True,
             text=True,
             env={**subprocess.os.environ, "PYTHONPATH": "src"},

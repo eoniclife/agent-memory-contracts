@@ -66,6 +66,7 @@ implementation identities, not public conformance vectors in this document.
 | `canonical_nested` | `{"a":null,"z":["é",{"a":1,"b":2}]}` |
 | `canonical_edge` | `{"a":1,"escaped":"quote \" backslash \\ newline \n tab \t","exponent_large":1e+20,"exponent_small":1e-06,"float":1.0,"negative_zero":-0.0,"é":"café","Ω":["μ",{"z":0}]}` |
 | `canonical_edge_sha256` | `327c497ef1950350a7c0467ad98bcd9e21f6be82b7a9e6344ec09b73d39d6f28` |
+| `record_fingerprint_edge` | `327c497ef1950350a7c0467ad98bcd9e21f6be82b7a9e6344ec09b73d39d6f28` |
 | `source` | `src_30af96ba2dc69b1ea84254cd` |
 | `episode` | `ep_b786eff487ad8e7f691d5fae` |
 | `span` | `span_9c210ceb7b234d35edf94125` |

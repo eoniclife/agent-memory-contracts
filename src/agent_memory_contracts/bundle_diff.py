@@ -65,8 +65,10 @@ def bundle_diff(
             Defaults to ``"id"``.
         duplicate_mode: How to resolve repeated ``id_field`` values
             within each input bundle. ``"last"`` is the legacy default;
-            ``"first"`` keeps the first occurrence; ``"raise"`` raises
-            :class:`agent_memory_contracts.DuplicateRecordError`.
+            ``"identical"`` collapses byte-identical repeats and raises
+            on divergent same-id payloads; ``"raise"`` raises
+            :class:`agent_memory_contracts.DuplicateRecordError` on any
+            repeated id.
 
     Returns:
         A :class:`BundleDiff` describing ``added``, ``removed``,

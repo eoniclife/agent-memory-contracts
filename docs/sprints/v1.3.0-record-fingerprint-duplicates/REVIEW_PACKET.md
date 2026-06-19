@@ -17,8 +17,8 @@ Changes:
 - add keyword-only `duplicate_mode` to `bundle_fingerprint`, `bundle_diff`, and
   `merge_bundles`;
 - preserve legacy `duplicate_mode="last"` defaults;
-- add CLI `--duplicate-mode {last,first,raise}` to `fingerprint`, `diff`, and
-  `merge`;
+- add CLI `--duplicate-mode {last,identical,raise}` to `fingerprint`, `diff`,
+  and `merge`;
 - update stability docs, canonicalization notes, README, changelog, and tests.
 
 ## Non-Goals
@@ -43,10 +43,15 @@ Legacy behavior remains the default:
 New opt-in modes:
 
 - `duplicate_mode="last"`: legacy default.
-- `duplicate_mode="first"`: keep the first same-bundle occurrence.
+- `duplicate_mode="identical"`: collapse byte-identical same-bundle replays,
+  but raise `DuplicateRecordError` on divergent same-id payloads.
 - `duplicate_mode="raise"`: raise `DuplicateRecordError` on any repeated
   semantic id, including identical replays. The error exposes whether the two
   payload fingerprints were equal through `same_content`.
+
+Cross-bundle conflicts in `merge_bundles` are intentionally still governed by
+`prefer={last,first,raise}`. `duplicate_mode` only applies inside each input
+bundle before the cross-bundle merge.
 
 ## Local Gates
 
@@ -75,11 +80,11 @@ Notes:
 
 ## Reviewer Questions
 
-1. Is `duplicate_mode="raise"` correctly strict on any repeated id, or should
-   it only reject divergent same-id payloads?
+1. Is the split between `duplicate_mode="identical"` for safe replay and
+   `duplicate_mode="raise"` for fully strict import the right public surface?
 2. Is `DuplicateRecordError` the right public shape, or should payload
    fingerprints be returned through a structured result type instead?
-3. Does adding `--duplicate-mode` to CLI outputs create any compatibility issue,
-   especially the additive `duplicate_mode` key in merge JSON output?
+3. Does preserving default human merge output while adding `duplicate_mode` to
+   merge JSON create any compatibility issue?
 4. Are there any remaining bundle surfaces that should accept the same mode
    before this lands in v1.3.0?

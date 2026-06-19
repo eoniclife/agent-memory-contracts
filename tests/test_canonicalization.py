@@ -21,6 +21,7 @@ from agent_memory_contracts import (
     make_state_reducer_decision_id,
     make_taste_card_id,
     make_taste_reducer_decision_id,
+    record_fingerprint,
 )
 from agent_memory_contracts._canonical import (
     CANONICALIZATION_VERSION,
@@ -73,6 +74,7 @@ def test_canonical_json_v1_bytes_are_stable() -> None:
 def test_canonical_json_v1_edge_bytes_are_stable() -> None:
     assert canonical_json(EDGE_VALUE) == EDGE_CANONICAL
     assert sha256_hex(canonical_json(EDGE_VALUE)) == EDGE_SHA256
+    assert record_fingerprint(EDGE_VALUE) == EDGE_SHA256
 
 
 def test_id_golden_vectors_are_unchanged() -> None:

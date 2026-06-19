@@ -164,15 +164,17 @@ Three runnable end-to-end examples:
   This separates semantic identity (`id`) from content equality, so
   importers can detect divergent same-id payloads without changing IDs.
 - **`bundle_fingerprint(records)`** for content-addressed bundle digests.
-  Set-semantic, order-insensitive, last-write-wins on duplicate ids
-  by default, with opt-in duplicate modes (`last`, `first`, `raise`).
+  Set-semantic and order-insensitive for distinct semantic ids and
+  identical duplicates. Divergent duplicate ids preserve legacy
+  last-write-wins behavior by default, with opt-in duplicate modes
+  (`last`, `identical`, `raise`).
   Same primitive the id helpers use, applied to the bundle as a whole.
   Useful as a cache key, idempotency token, or change-detection digest.
 - **`bundle_diff(a, b)`** for set-semantic diff between two bundles.
   Returns a `BundleDiff(added, removed, changed, unchanged_count)`
-  with full pre/post records for the changed entries. Short-circuits
-  via `bundle_fingerprint` when both bundles hash equal, so the
-  "no changes" case is one hash comparison.
+  with full pre/post records for the changed entries. It uses
+  `bundle_fingerprint` to short-circuit the classification loop when
+  both bundles hash equal.
 - **`merge_bundles(*bundles, ..., prefer=...)`** for many-to-one
   bundle union. Returns a `BundleMerge(records, conflicts,
   duplicate_ids)`. Records are deduplicated by `id_field`; intra-bundle
@@ -256,11 +258,12 @@ the alternative is a runtime bug you'll only catch in production.
    and a `ValidationReport` (what passed). The receipt, not the
    context pack, is the audit trail.
 6. **Bundles are content-addressed.** `bundle_fingerprint(records)`
-   returns a deterministic SHA-256 of the whole bundle, set-
-   semantic and order-insensitive. Same records in any order,
-   same fingerprint. A bundle is treated as a set of records
-   keyed by ``id``; duplicate ids are collapsed (last write wins)
-   before hashing.
+   returns a deterministic SHA-256 of the whole bundle. Unique
+   semantic ids and identical duplicate replays are order-insensitive:
+   same records in any order, same fingerprint. A bundle is treated
+   as a set of records keyed by `id`; divergent duplicate ids preserve
+   legacy last-write-wins behavior by default, and can be rejected with
+   `duplicate_mode="identical"` or `duplicate_mode="raise"`.
 
 ## Poisoning demo
 
@@ -383,8 +386,8 @@ console, MCP wiring) is mapped ADR-by-ADR in
 
 Since 0.3.0, the library ships a `bundle_fingerprint` primitive
 that hashes a set of records into a single 64-char hex digest.
-The same records in any order produce the same hash; any byte
-change in any record changes the hash.
+The same unique records in any order produce the same hash; any
+byte change in any effective record changes the hash.
 
 ```python
 from agent_memory_contracts import bundle_fingerprint, record_fingerprint
@@ -408,8 +411,12 @@ assert bundle_fingerprint(records) == bundle_fingerprint(
 tampered_record = dict(dataclasses.asdict(records[0]), metadata={"tampered": True})
 assert record_fingerprint(records[0]) != record_fingerprint(tampered_record)
 
-# Strict imports can fail on repeated semantic ids instead of silently
-# applying the legacy last-write-wins policy.
+# Safe imports can replay identical records but fail on divergent
+# same-id payloads instead of silently applying legacy last-write-wins.
+safe_digest = bundle_fingerprint(records, duplicate_mode="identical")
+
+# Fully strict imports can reject any repeated semantic id, even an
+# identical replay.
 strict_digest = bundle_fingerprint(records, duplicate_mode="raise")
 ```
 
@@ -432,8 +439,8 @@ diff = bundle_diff(bundle_a, bundle_b)
 print(diff.added, diff.removed, len(diff.changed), diff.unchanged_count)
 
 # When both bundles hash to the same fingerprint, the function
-# short-circuits and returns the empty diff without iterating
-# records. The common "no changes" case is one hash comparison.
+# short-circuits and returns the empty diff without running the
+# per-record added/removed/changed classification loop.
 ```
 
 For the non-Python case, the CLI exposes the same primitive:

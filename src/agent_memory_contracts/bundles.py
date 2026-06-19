@@ -10,7 +10,9 @@ The library's id helpers already use SHA-256 of canonical JSON to
 give every record a content-derived identifier. This module extends
 the same trick to the bundle as a whole: a deterministic
 fingerprint that is sensitive to any byte change in any record,
-but insensitive to the order of the input iterable.
+but insensitive to the order of unique records or identical duplicate
+replays. Divergent duplicate ids are still order-sensitive under the
+legacy ``duplicate_mode="last"`` policy.
 
 The intended use cases:
 
@@ -48,7 +50,7 @@ from .evidence_ids import sha256_hex
 #: collide with record content.
 _SEPARATOR = "\n"
 
-DuplicateMode = Literal["last", "first", "raise"]
+DuplicateMode = Literal["last", "identical", "raise"]
 
 
 class DuplicateRecordError(ValueError):
@@ -82,9 +84,9 @@ class DuplicateRecordError(ValueError):
 
 
 def _validate_duplicate_mode(duplicate_mode: DuplicateMode) -> None:
-    if duplicate_mode not in ("last", "first", "raise"):
+    if duplicate_mode not in ("last", "identical", "raise"):
         raise ValueError(
-            "duplicate_mode must be 'last', 'first', or 'raise'; "
+            "duplicate_mode must be 'last', 'identical', or 'raise'; "
             f"got {duplicate_mode!r}"
         )
 
@@ -158,7 +160,14 @@ def _canonical_records_by_id(
                     first_canonical=by_id[id_value],
                     duplicate_canonical=canonical,
                 )
-            if duplicate_mode == "first":
+            if duplicate_mode == "identical":
+                if canonical != by_id[id_value]:
+                    _raise_duplicate(
+                        id_field=id_field,
+                        id_value=id_value,
+                        first_canonical=by_id[id_value],
+                        duplicate_canonical=canonical,
+                    )
                 continue
         by_id[id_value] = canonical
     return by_id
@@ -191,8 +200,9 @@ def bundle_fingerprint(
             identifier field on every record type in the library.
         duplicate_mode: How to resolve repeated ``id_field`` values
             within the input bundle. ``"last"`` is the legacy default
-            and keeps the final occurrence. ``"first"`` keeps the first
-            occurrence. ``"raise"`` raises :class:`DuplicateRecordError`
+            and keeps the final occurrence. ``"identical"`` collapses
+            byte-identical repeats and raises on divergent same-id
+            payloads. ``"raise"`` raises :class:`DuplicateRecordError`
             on any repeated id and includes both record fingerprints.
 
     Returns:
@@ -200,12 +210,15 @@ def bundle_fingerprint(
 
     The fingerprint is:
 
-    - **Deterministic.** The same records in any order produce
+    - **Deterministic.** The same unique records in any order produce
       the same hash.
     - **Content-sensitive.** Any byte change in any record changes
       the hash.
     - **Set-semantic.** Records are deduplicated by ``id_field``
       before hashing; the bundle is treated as a set, not a list.
+      Divergent duplicate ids remain order-sensitive under the legacy
+      ``"last"`` mode; use ``"identical"`` or ``"raise"`` when input
+      order must not resolve same-id payload conflicts.
     - **Idempotent.** Re-running the same pipeline on the same
       inputs produces the same hash.
     """

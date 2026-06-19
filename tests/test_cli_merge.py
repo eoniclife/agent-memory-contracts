@@ -69,6 +69,7 @@ class CLIMergeSuccessTests(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("6 records", r.stdout)
         self.assertIn("0 conflict", r.stdout)
+        self.assertNotIn("duplicate_mode", r.stdout)
 
     def test_merge_overlapping_bundles_prefer_last_wins(self):
         a = self._write_json("a.json", [_rec(0), _rec(1)])
@@ -99,15 +100,16 @@ class CLIMergeSuccessTests(unittest.TestCase):
         # stderr. The wording comes from merge_bundles itself.
         self.assertIn("different content", r.stderr.lower())
 
-    def test_merge_duplicate_mode_first_keeps_first_duplicate(self):
+    def test_merge_duplicate_mode_identical_accepts_same_duplicate(self):
         a = self._write_json("a.json", [
             {"id": "x", "value": 1},
-            {"id": "x", "value": 2},
+            {"id": "x", "value": 1},
         ])
-        r = _run(["merge", str(a), "--duplicate-mode", "first"])
+        r = _run(["merge", str(a), "--duplicate-mode", "identical"])
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("1 records", r.stdout)
         self.assertIn("1 duplicate", r.stdout)
+        self.assertIn("duplicate_mode=identical", r.stdout)
 
     def test_merge_duplicate_mode_raise_exits_1_on_duplicate(self):
         a = self._write_json("a.json", [
@@ -186,6 +188,12 @@ class CLIMergeJSONModeTests(unittest.TestCase):
         self.assertEqual(r.stdout, "")
         payload = json.loads(r.stderr)
         self.assertEqual(payload["ok"], False)
+        self.assertEqual(payload["error_code"], "duplicate_record")
+        self.assertEqual(payload["id_field"], "id")
+        self.assertEqual(payload["id_value"], "x")
+        self.assertFalse(payload["same_content"])
+        self.assertEqual(len(payload["first_fingerprint"]), 64)
+        self.assertEqual(len(payload["duplicate_fingerprint"]), 64)
         self.assertIn("duplicate record id", payload["error"])
 
     def test_merge_json_overlap_surfaces_conflict(self):

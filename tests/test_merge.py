@@ -14,8 +14,9 @@ falsification properties of the contract:
 6. ``prefer="last"`` resolves to the last bundle's version.
 7. ``prefer="first"`` resolves to the first bundle's version.
 8. ``prefer="raise"`` raises ``ValueError`` on the first conflict.
-9. Duplicate ids within a single input bundle are deduplicated
-   silently (last-write-wins) and reported in ``duplicate_ids``.
+9. Duplicate ids within a single input bundle use the default
+   last-write-wins policy unless ``duplicate_mode`` asks to reject them,
+   and non-raising modes report them in ``duplicate_ids``.
 10. ``id_field`` works for any identifier (e.g. ``"slug"``).
 11. Mixed dict and dataclass inputs merge correctly.
 12. End-to-end with a real ``SourceRecord`` from the library.
@@ -195,6 +196,24 @@ class OverlappingDifferentContentTests(unittest.TestCase):
         # Winner is the "first" one.
         self.assertEqual(m.records[0]["v"], 1)
 
+    def test_canonical_difference_surfaces_conflict_even_if_dicts_equal(self):
+        a = [{"id": "x", "value": 1}]
+        b = [{"id": "x", "value": 1.0}]
+        self.assertEqual(a[0], b[0])
+        last = merge_bundles(a, b, prefer="last")
+        first = merge_bundles(a, b, prefer="first")
+        self.assertEqual(len(last.conflicts), 1)
+        self.assertEqual(len(first.conflicts), 1)
+        self.assertEqual(last.conflicts[0][0], "x")
+        self.assertEqual(first.conflicts[0][0], "x")
+
+    def test_canonical_difference_uses_same_rule_for_prefer_raise(self):
+        a = [{"id": "x", "value": 1}]
+        b = [{"id": "x", "value": 1.0}]
+        with self.assertRaises(ValueError) as ctx:
+            merge_bundles(a, b, prefer="raise")
+        self.assertIn("different content", str(ctx.exception))
+
 
 class PreferLastTests(unittest.TestCase):
     def test_prefer_last_winner_is_from_last_bundle(self):
@@ -302,13 +321,22 @@ class DuplicateIdsInSingleBundleTests(unittest.TestCase):
         # The id was duplicated.
         self.assertEqual(m.duplicate_ids, ["rec_00000000"])
 
-    def test_duplicate_mode_first_keeps_first_record_and_reports_duplicate(self):
-        bundle = [_rec(0), dict(_rec(0), value=99)]
-        m = merge_bundles(bundle, duplicate_mode="first")
+    def test_duplicate_mode_identical_accepts_same_content_duplicate(self):
+        bundle = [_rec(0), _rec(0)]
+        m = merge_bundles(bundle, duplicate_mode="identical")
         self.assertEqual(len(m.records), 1)
         self.assertEqual(m.records[0]["value"], 0)
         self.assertEqual(m.conflicts, [])
         self.assertEqual(m.duplicate_ids, ["rec_00000000"])
+
+    def test_duplicate_mode_identical_rejects_divergent_duplicate(self):
+        with self.assertRaises(DuplicateRecordError) as ctx:
+            merge_bundles(
+                [_rec(0), dict(_rec(0), value=99)],
+                duplicate_mode="identical",
+            )
+        self.assertEqual(ctx.exception.id_value, "rec_00000000")
+        self.assertFalse(ctx.exception.same_content)
 
     def test_duplicate_mode_raise_rejects_identical_duplicate(self):
         with self.assertRaises(DuplicateRecordError) as ctx:
@@ -324,6 +352,22 @@ class DuplicateIdsInSingleBundleTests(unittest.TestCase):
             )
         self.assertEqual(ctx.exception.id_value, "rec_00000000")
         self.assertFalse(ctx.exception.same_content)
+
+    def test_duplicate_mode_raise_does_not_apply_across_bundles(self):
+        m = merge_bundles([_rec(0)], [_rec(0)], duplicate_mode="raise")
+        self.assertEqual(len(m.records), 1)
+        self.assertEqual(m.conflicts, [])
+        self.assertEqual(m.duplicate_ids, [])
+
+    def test_cross_bundle_conflict_still_uses_prefer_with_duplicate_raise(self):
+        m = merge_bundles(
+            [{"id": "x", "v": 1}],
+            [{"id": "x", "v": 2}],
+            duplicate_mode="raise",
+            prefer="last",
+        )
+        self.assertEqual(len(m.conflicts), 1)
+        self.assertEqual(m.records[0]["v"], 2)
 
     def test_duplicate_ids_reported_across_bundles(self):
         a = [_rec(0), _rec(0), _rec(1)]
