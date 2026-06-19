@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from agent_memory_contracts import (
+    ConflictResolution,
     bundle_fingerprint,
+    compute_audit_pack,
+    compute_hygiene_report,
     make_candidate_id,
     make_context_pack_build_receipt_id,
     make_context_pack_id,
@@ -22,6 +25,7 @@ from agent_memory_contracts import (
 from agent_memory_contracts._canonical import (
     CANONICALIZATION_VERSION,
     canonical_json,
+    sha256_hex,
 )
 from agent_memory_contracts.candidate_ids import canonical_payload as candidate_canonical
 from agent_memory_contracts.contextpack_ids import canonical_payload as contextpack_canonical
@@ -34,6 +38,24 @@ from agent_memory_contracts.taste_ids import canonical_payload as taste_canonica
 
 NESTED_VALUE = {"z": ["é", {"b": 2, "a": 1}], "a": None}
 NESTED_CANONICAL = '{"a":null,"z":["é",{"a":1,"b":2}]}'
+EDGE_VALUE = {
+    "a": 1,
+    "float": 1.0,
+    "negative_zero": -0.0,
+    "exponent_small": 1e-6,
+    "exponent_large": 1e20,
+    "escaped": 'quote " backslash \\ newline \n tab \t',
+    "é": "café",
+    "Ω": ["μ", {"z": 0}],
+}
+EDGE_CANONICAL = (
+    '{"a":1,"escaped":"quote \\" backslash \\\\ newline \\n tab \\t",'
+    '"exponent_large":1e+20,"exponent_small":1e-06,"float":1.0,'
+    '"negative_zero":-0.0,"é":"café","Ω":["μ",{"z":0}]}'
+)
+EDGE_SHA256 = (
+    "327c497ef1950350a7c0467ad98bcd9e21f6be82b7a9e6344ec09b73d39d6f28"
+)
 
 
 def test_canonical_json_v1_bytes_are_stable() -> None:
@@ -46,6 +68,11 @@ def test_canonical_json_v1_bytes_are_stable() -> None:
     assert state_canonical(NESTED_VALUE) == NESTED_CANONICAL
     assert contextpack_canonical(NESTED_VALUE) == NESTED_CANONICAL
     assert runtime_canonical(NESTED_VALUE) == NESTED_CANONICAL
+
+
+def test_canonical_json_v1_edge_bytes_are_stable() -> None:
+    assert canonical_json(EDGE_VALUE) == EDGE_CANONICAL
+    assert sha256_hex(canonical_json(EDGE_VALUE)) == EDGE_SHA256
 
 
 def test_id_golden_vectors_are_unchanged() -> None:
@@ -176,6 +203,155 @@ def test_id_golden_vectors_are_unchanged() -> None:
         )
         == "ctxval_41d8059843e12edeb790438a"
     )
+
+
+def test_public_report_id_golden_vectors_are_unchanged() -> None:
+    resolution = ConflictResolution.from_dict({
+        "conflict_id": "pref_conflict_demo",
+        "chosen_version_index": 0,
+        "chosen_record": {
+            "id": "pref_demo",
+            "ledger_type": "preference",
+            "preference_text": "Use canonical vectors",
+        },
+        "rejected_record_ids": ["pref_demo_old"],
+        "resolved_by": "codex",
+        "resolved_at": "2026-06-19T00:00:00Z",
+        "rationale": "Golden vector resolution for canonicalization v1.",
+        "superseded_at": None,
+        "metadata": {"source": "canonicalization-test"},
+    })
+    assert resolution.id == "confres_90dd8c3927f2bc13abdb6757"
+
+    hygiene_pref = {
+        "id": "pref_demo",
+        "schema_version": "1.0.0",
+        "ledger_type": "preference",
+        "status": "active",
+        "confidence": "high",
+        "scope": "global",
+        "subject": "memory architecture",
+        "preference_text": "test pref_demo",
+        "domain": "architecture",
+        "strength": "hard_constraint",
+        "valid_from": "2026-06-01T00:00:00Z",
+        "valid_until": "2026-12-01T00:00:00Z",
+        "stale_after": "2026-07-01T00:00:00Z",
+        "evidence_span_ids": ["span_demo"],
+        "privacy_class": "internal",
+        "metadata": {},
+    }
+    hygiene_span = {
+        "id": "span_demo",
+        "schema_version": "1.0.0",
+        "source_id": "src_demo",
+        "locator": {"kind": "line_range", "value": "1-2"},
+        "span_hash_sha256": "0" * 64,
+        "privacy_class": "internal",
+        "metadata": {},
+    }
+    hygiene = compute_hygiene_report(
+        [hygiene_pref, hygiene_span],
+        window_start="2026-06-01T00:00:00Z",
+        window_end="2026-06-30T00:00:00Z",
+        now="2026-06-15T00:00:00Z",
+        conflicts={"surfaced": 1, "resolved": 1},
+    )
+    assert hygiene.id == "hygiene_de539c8fe7709c2b01a5491f"
+
+    audit = compute_audit_pack(
+        [
+            {
+                "id": "src_aaaa",
+                "schema_version": "1.0.0",
+                "source_type": "manual_note",
+                "title": "Rate policy v4",
+                "origin_uri": None,
+                "raw_ref": {"kind": "local_path", "value": "policies/v4.md"},
+                "content_hash_sha256": "a" * 64,
+                "captured_at": "2026-05-18T00:00:00Z",
+                "observed_at": "2026-05-18T00:00:00Z",
+                "author_or_sender": "cfo@example.com",
+                "participants": [],
+                "privacy_class": "internal",
+                "custody_status": "external_pointer",
+                "parser_version": "v1",
+                "metadata": {},
+            },
+            {
+                "id": "span_aaaa",
+                "schema_version": "1.0.0",
+                "source_id": "src_aaaa",
+                "episode_id": None,
+                "locator": {"kind": "line_range", "value": "7-7"},
+                "text_excerpt": "Grade B rate is 12.75%",
+                "excerpt_policy": "short_quote_allowed",
+                "span_hash_sha256": "b" * 64,
+                "privacy_class": "internal",
+                "metadata": {},
+            },
+            {
+                "id": "cand_claim_aaaa",
+                "schema_version": "1.0.0",
+                "candidate_type": "claim",
+                "evidence_span_ids": ["span_aaaa"],
+                "claim_text": "Grade B rate is 12.75%",
+                "confidence": "high",
+                "status": "candidate",
+                "metadata": {},
+            },
+            {
+                "id": "redmem_aaaa",
+                "schema_version": "1.0.0",
+                "decision_type": "promote",
+                "target_candidate_ids": ["cand_claim_aaaa"],
+                "target_ledger_entry_ids": ["fact_aaaa"],
+                "evidence_span_ids": ["span_aaaa"],
+                "rationale": "chain verified",
+                "decided_by": {
+                    "agent": "test-reducer",
+                    "model": "deterministic",
+                    "tool": None,
+                    "prompt_ref": None,
+                },
+                "decided_at": "2026-06-01T10:00:00Z",
+                "confidence": "high",
+                "risk_class": "low",
+                "checks": {
+                    "provenance": "pass",
+                    "temporal_validity": "pass",
+                    "contradiction_scan": "pass",
+                    "privacy": "pass",
+                    "usefulness": "pass",
+                },
+                "metadata": {},
+            },
+            {
+                "id": "fact_aaaa",
+                "schema_version": "1.0.0",
+                "ledger_type": "fact",
+                "status": "active",
+                "confidence": "high",
+                "scope": "company",
+                "subject": "lap.grade_b.rate",
+                "predicate": "rate_is",
+                "object": "12.75%",
+                "fact_text": "Grade B card rate is 12.75% under v4",
+                "source_record_ids": ["src_aaaa"],
+                "evidence_span_ids": ["span_aaaa"],
+                "candidate_ids": ["cand_claim_aaaa"],
+                "reducer_decision_id": "redmem_aaaa",
+                "valid_from": "2026-05-18T00:00:00Z",
+                "valid_until": None,
+                "stale_after": None,
+                "supersedes": [],
+                "superseded_by": [],
+                "metadata": {},
+            },
+        ],
+        as_of="2026-06-15T12:00:00Z",
+    )
+    assert audit.id == "audit_cb4600493f45712458700420"
 
 
 def test_bundle_fingerprint_golden_vector_is_unchanged() -> None:

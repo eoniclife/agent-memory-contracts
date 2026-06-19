@@ -11,8 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Canonical JSON v1 is now centralized in a private helper and documented with
   golden vectors for existing source, episode, span, candidate, ledger, reducer,
-  TasteCard, state, ContextPack, runtime-store, anchor, and bundle fingerprint
-  identity bytes. Existing public wrapper functions remain in place.
+  TasteCard, state, ContextPack, conflict-resolution, hygiene-report,
+  audit-pack, runtime payload, and bundle-fingerprint bytes. Legacy anchor-scope
+  serialization is regression-tested separately. Existing public wrapper
+  functions remain in place.
 
 ### Fixed
 

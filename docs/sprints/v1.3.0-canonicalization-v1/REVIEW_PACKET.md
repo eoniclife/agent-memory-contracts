@@ -15,7 +15,7 @@ json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
 This sprint centralizes that rule in one private helper, keeps all existing
 public wrapper functions working, and publishes golden vectors for the current
-ID and fingerprint surface.
+public ID and fingerprint surface.
 
 ## Scope
 
@@ -38,9 +38,12 @@ Changed surfaces:
 - `src/agent_memory_contracts/runtime/anchors.py`: preserves legacy stored scope
   serialization for replay descriptors; anchor fingerprints continue to use
   `bundle_fingerprint(...)`.
-- `docs/CANONICALIZATION-v1.md`: durable byte contract and golden vector table.
+- `docs/CANONICALIZATION-v1.md`: durable byte contract and golden vector table,
+  including the public conflict-resolution, hygiene-report, and audit-pack ID
+  families.
 - `tests/test_canonicalization.py`: regression tests for canonical JSON bytes,
-  existing ID vectors, and existing bundle fingerprint vectors.
+  edge primitive bytes, existing ID vectors, report ID vectors, and existing
+  bundle fingerprint vectors.
 - `CHANGELOG.md`: Unreleased entry.
 
 ## Non-Goals
@@ -50,6 +53,8 @@ Changed surfaces:
 - No change to current ID prefixes or digest truncation lengths.
 - No change to embedding stable-text rendering, integration response JSON, CLI
   fixture JSON, or migration example output.
+- No portable guarantee for non-finite floats; valid portable v1 values should
+  use finite numbers.
 - No semantic identity split or duplicate-mode behavior in this sprint.
 
 ## Compatibility
@@ -85,8 +90,8 @@ python -m compileall -q src
 
 Results:
 
-- Focused canonicalization, bundle, ID, runtime anchor, and runtime store tests
-  passed.
+- Focused canonicalization, bundle, ID, report-ID, runtime anchor, and runtime
+  store tests passed.
 - Invariant tests passed with expected Arthashila dataset skips.
 - Full suite passed with expected Arthashila dataset skips and the existing
   jsonschema-installed skip.
@@ -116,6 +121,10 @@ Results:
 - Python's JSON behavior is the reference implementation here. Ports in other
   runtimes need to match escaping, key ordering, Unicode handling, numeric
   rendering, and separator bytes against the golden vectors.
+- Runtime grounding creates internal `task_*`, `ans_*`, and synthetic
+  `redstate_*` identifiers through runtime canonical JSON. Those are
+  implementation identities covered by runtime tests, not public conformance
+  vectors in this document.
 - The central helper is intentionally private; that avoids freezing too much
   public surface, but it also means external users rely on docs and tests rather
   than a formal import.
