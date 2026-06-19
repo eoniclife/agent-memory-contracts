@@ -92,9 +92,17 @@ def core_state_supersession_chain(state_id: str, states: Iterable[dict[str, Any]
 def _supersession_chain(state_id: str, states: Iterable[dict[str, Any]]) -> list[str]:
     by_id = {state["id"]: state for state in states}
     chain = [state_id]
+    seen = {state_id}
     current = by_id.get(state_id)
     while current and current.get("superseded_by"):
         next_id = current["superseded_by"][0]
+        if next_id in seen:
+            cycle = chain + [next_id]
+            raise ValueError(
+                "state supersession cycle detected: "
+                + " -> ".join(cycle)
+            )
         chain.append(next_id)
+        seen.add(next_id)
         current = by_id.get(next_id)
     return chain

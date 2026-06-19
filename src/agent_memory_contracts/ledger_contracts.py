@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Iterable, Protocol, TypeVar, cast
 
+from ._supersession import validate_acyclic_supersession_graph
 from .ledger_ids import make_ledger_entry_id, make_reducer_decision_id
 
 T = TypeVar("T")
@@ -492,3 +493,7 @@ def validate_ledger_bundle(
                 <= parse_iso8601(cast(str, newer.valid_from)),
                 "superseded entry valid_until must be <= successor valid_from",
             )
+    validate_acyclic_supersession_graph(
+        ledgers_by_id,
+        record_kind="ledger",
+    )

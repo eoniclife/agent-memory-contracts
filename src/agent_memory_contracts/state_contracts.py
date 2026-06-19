@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Iterable, TypeVar, cast
 
+from ._supersession import validate_acyclic_supersession_graph
 from .ledger_contracts import _auto_migrate_ledger_entries, ledger_entry_from_dict
 from .state_ids import make_core_state_id, make_project_state_id, make_state_reducer_decision_id
 from .taste_contracts import _auto_migrate_taste_cards, taste_card_from_dict
@@ -558,6 +559,10 @@ def _validate_supersession_family(states_by_id: dict[str, StateSnapshotBase]) ->
                 <= parse_iso8601(cast(str, newer.valid_from)),
                 "superseded state valid_until must be <= successor valid_from",
             )
+    validate_acyclic_supersession_graph(
+        states_by_id,
+        record_kind="state",
+    )
 
 
 def validate_state_bundle(

@@ -345,6 +345,36 @@ class SupersessionTests(_GateCase):
                               supersessions=[(weekly_id, weekly_id)])
         self.assertTrue(any("by itself" in e for e in ctx.exception.errors))
 
+    def test_supersession_cycle_is_structured_rejection(self):
+        universe = self.universe
+        entry_a = _fact(universe.candidates["budget"],
+                        source_id=str(universe.source["id"]),
+                        decision_id="redmem_x", valid_from=T2)
+        entry_b = _fact(universe.candidates["daily"],
+                        source_id=str(universe.source["id"]),
+                        decision_id="redmem_x", valid_from=T2)
+        decision = _decision(
+            "supersede",
+            sorted([str(universe.candidates["budget"]["id"]),
+                    str(universe.candidates["daily"]["id"])]),
+            sorted([str(entry_a["id"]), str(entry_b["id"])]),
+            sorted([universe.span_ids[1], universe.span_ids[2]]),
+            "mutual supersession cycle should stay structured")
+        entry_a["reducer_decision_id"] = str(decision["id"])
+        entry_b["reducer_decision_id"] = str(decision["id"])
+
+        before = self.store.counts()
+        with self.assertRaises(ValidationRejectedError) as ctx:
+            self.gate.promote(
+                decision, [entry_a, entry_b],
+                supersessions=[(str(entry_a["id"]), str(entry_b["id"])),
+                                (str(entry_b["id"]), str(entry_a["id"]))])
+
+        self.assertTrue(any(
+            "ledger supersession cycle detected" in error
+            for error in ctx.exception.errors))
+        self.assertEqual(self.store.counts(), before)
+
     def test_supersede_replay_is_idempotent(self):
         self._supersede()
         before = self.store.counts()

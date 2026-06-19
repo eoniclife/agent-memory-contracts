@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Ledger, TasteCard, and state-snapshot bundle validation now rejects
+  supersession cycles after reciprocity and temporal handoff checks
+  pass. Taste/state chain query helpers also guard against malformed
+  cyclic inputs instead of looping.
 - `SchemaMigrator.migrate_bundle` now finds migration paths per
   distinct record version, so mixed-version bundles are no longer
   order-dependent. Records already at the target, records missing
