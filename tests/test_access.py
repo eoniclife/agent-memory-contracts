@@ -383,7 +383,7 @@ class TestSummarizeAccess(unittest.TestCase):
         self.assertEqual(summary.by_privacy_class["public"], 1)
         self.assertEqual(summary.by_privacy_class["highly_sensitive"], 1)
 
-    def test_summary_counts_type_filtered_records_by_privacy_and_reason(self) -> None:
+    def test_summary_skips_type_filtered_records_by_privacy(self) -> None:
         from tests.test_citations import _build_fact_ledger_entry
         src, span = build_source_and_span()
         fact = _build_fact_ledger_entry(src.id, [span.id])
@@ -393,7 +393,7 @@ class TestSummarizeAccess(unittest.TestCase):
             name="sources-only",
         )
         summary = summarize_access([check_access(fact, scope)])
-        self.assertEqual(summary.by_privacy_class, {"internal": 1})
+        self.assertEqual(summary.by_privacy_class, {})
         self.assertEqual(summary.by_reason_code, {"record_type_not_allowed": 1})
 
     def test_summary_falls_back_to_legacy_reason_parser(self) -> None:

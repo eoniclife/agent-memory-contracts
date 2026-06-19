@@ -25,12 +25,15 @@ Changes:
 - add `AccessSummary.by_reason_code`;
 - make `summarize_access` prefer structured decision fields and fall back to
   the legacy `reason` parser for manually constructed old-style decisions;
+- preserve `AccessSummary.by_privacy_class` as a privacy-class summary, so
+  record-type-only drops are counted in `by_reason_code` but do not introduce
+  new privacy-class buckets;
 - normalize dict discriminator values to stable record-type names such as
   `fact_ledger_entry` and `candidate_claim`;
 - serialize the structured fields from MCP `evaluate_access_scope`;
-- use MCP bundle-plane names as a record-type fallback when records omit their
-  own discriminator fields, so `allowed_record_types` cannot be bypassed by
-  under-specified plane records;
+- use MCP bundle-plane names as the authoritative record type for
+  plane-organized input, so payload discriminator fields cannot override the
+  plane selected by the caller;
 - include structured summary maps in MCP access results.
 
 ## Non-Goals
@@ -79,7 +82,12 @@ new structured summaries.
 Stable `record_type` metadata uses schema-style names: for example
 `ledger_type="fact"` becomes `fact_ledger_entry`, and
 `candidate_type="claim"` becomes `candidate_claim`. MCP access evaluation also
-uses the bundle plane as a fallback for under-specified dict records.
+uses the bundle plane as the authoritative type for plane-organized records.
+
+Record-type-only drops are intentionally excluded from
+`AccessSummary.by_privacy_class`. They are surfaced in
+`AccessSummary.by_reason_code["record_type_not_allowed"]` instead, preserving
+the legacy meaning of the privacy-class summary.
 
 ## Local Gates
 
@@ -93,6 +101,7 @@ PYTHONPATH=src python3 -m pytest -q
 PYTHONPATH=src python3 scripts/audit_public_api.py
 PYTHONPATH=src python3 -m compileall -q src
 git diff --check
+/tmp/amc-release-check-venv/bin/python scripts/check_release_artifacts.py --run-sdist-tests --run-examples
 ```
 
 ## Reviewer Questions

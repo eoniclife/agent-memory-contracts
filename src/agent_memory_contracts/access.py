@@ -401,6 +401,8 @@ def summarize_access(decisions: Iterable[AccessDecision]) -> AccessSummary:
 
     by_privacy_class: dict[str, int] = {}
     for d in decisions_list:
+        if d.reason_code == "record_type_not_allowed":
+            continue
         if d.privacy_class is not None:
             by_privacy_class[d.privacy_class] = (
                 by_privacy_class.get(d.privacy_class, 0) + 1

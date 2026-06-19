@@ -469,10 +469,10 @@ def _record_type_for_mcp(
     record: Any,
     plane_record_type: str | None = None,
 ) -> str | None:
+    if plane_record_type is not None:
+        return plane_record_type
     record_type = _access_record_type_string(record)
-    if record_type and record_type not in {"candidate", "ledger_entry"}:
-        return record_type
-    return plane_record_type
+    return record_type or None
 
 
 def _allowed_record_types_tuple(scope: BundleScope) -> tuple[str, ...] | None:

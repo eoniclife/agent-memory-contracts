@@ -26,8 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The new metadata fields preserve existing dataclass equality/hash comparisons.
   `AccessSummary` now includes `by_reason_code`, and MCP access evaluation
   serializes the structured decision and summary fields. Dict access decisions
-  now use stable record-type names, and MCP plane-organized records use their
-  bundle plane as a fallback record type.
+  now use stable record-type names, MCP plane-organized records use their
+  bundle plane as the authoritative record type, and record-type-only drops do
+  not alter the legacy `AccessSummary.by_privacy_class` counts.
 
 ### Fixed
 
