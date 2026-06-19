@@ -308,6 +308,83 @@ class TestMigrateBundle(unittest.TestCase):
         for r in result.bundle:
             self.assertEqual(r["schema_version"], "1.1.0")
 
+    def test_mixed_version_bundle_order_independent(self) -> None:
+        m = _build_two_step_migrator()
+        records = {
+            "old": {"id": "old", "schema_version": "1.0.0", "title": "old"},
+            "middle": {"id": "middle", "schema_version": "1.0.5", "title": "middle"},
+            "target": {"id": "target", "schema_version": "1.1.0", "title": "target"},
+        }
+        permutations = (
+            ("old-first", ("old", "middle", "target")),
+            ("middle-first", ("middle", "old", "target")),
+            ("target-first", ("target", "middle", "old")),
+        )
+
+        for name, order in permutations:
+            with self.subTest(name=name):
+                bundle = [dict(records[record_id]) for record_id in order]
+                result = m.migrate_bundle(bundle, target_version="1.1.0")
+
+                self.assertEqual(
+                    [record["id"] for record in result.bundle],
+                    list(order),
+                )
+                self.assertEqual(result.records_migrated, 2)
+                self.assertEqual(result.records_unchanged, 1)
+                self.assertEqual(
+                    result.steps_applied,
+                    (("1.0.0", "1.0.5"), ("1.0.5", "1.1.0")),
+                )
+                for record in result.bundle:
+                    self.assertEqual(record["schema_version"], "1.1.0")
+
+    def test_steps_applied_follow_path_order_when_registered_out_of_order(self) -> None:
+        m = SchemaMigrator()
+        m.register(_step_1_0_5_to_1_1_0())
+        m.register(_step_1_0_to_1_0_5())
+        bundle = [{"id": "old", "schema_version": "1.0.0", "title": "old"}]
+
+        result = m.migrate_bundle(bundle, target_version="1.1.0")
+
+        self.assertEqual(
+            result.steps_applied,
+            (("1.0.0", "1.0.5"), ("1.0.5", "1.1.0")),
+        )
+
+    def test_missing_schema_version_in_mixed_bundle_defaults_per_record(self) -> None:
+        m = _build_two_step_migrator()
+        bundle = [
+            {"id": "target", "schema_version": "1.1.0", "title": "target"},
+            {"id": "missing", "title": "old missing version"},
+        ]
+
+        result = m.migrate_bundle(bundle, target_version="1.1.0")
+
+        self.assertEqual(result.records_migrated, 1)
+        self.assertEqual(result.records_unchanged, 1)
+        self.assertEqual(result.bundle[0]["schema_version"], "1.1.0")
+        self.assertEqual(result.bundle[1]["schema_version"], "1.1.0")
+        self.assertEqual(result.bundle[1]["parser_version"], "v2")
+        self.assertEqual(result.bundle[1]["evidence_quality_score"], 1.0)
+
+    def test_unknown_version_raises_independent_of_order(self) -> None:
+        m = _build_two_step_migrator()
+        old = {"id": "old", "schema_version": "1.0.0", "title": "old"}
+        future = {"id": "future", "schema_version": "2.0.0", "title": "future"}
+
+        for name, bundle in (
+            ("future-first", [future, old]),
+            ("future-last", [old, future]),
+        ):
+            with self.subTest(name=name):
+                with self.assertRaises(ValueError) as ctx:
+                    m.migrate_bundle(
+                        [dict(record) for record in bundle],
+                        target_version="1.1.0",
+                    )
+                self.assertIn("2.0.0", str(ctx.exception))
+
     def test_no_path_raises(self) -> None:
         m = SchemaMigrator()
         with self.assertRaises(ValueError):
@@ -337,6 +414,22 @@ class TestMigrateBundle(unittest.TestCase):
         m = SchemaMigrator()
         with self.assertRaises(ValueError):
             m.migrate_bundle([], target_version="")
+
+    def test_dataclass_and_dict_mixed_bundle(self) -> None:
+        m = _build_two_step_migrator()
+        from agent_memory_contracts import SourceRecord
+
+        src, _ = build_source_and_span()
+        self.assertIsInstance(src, SourceRecord)
+        target = {"id": "target", "schema_version": "1.1.0", "title": "target"}
+
+        result = m.migrate_bundle([target, src], target_version="1.1.0")
+
+        self.assertEqual(result.records_migrated, 1)
+        self.assertEqual(result.records_unchanged, 1)
+        self.assertEqual(result.bundle[0]["schema_version"], "1.1.0")
+        self.assertIsInstance(result.bundle[1], dict)
+        self.assertEqual(result.bundle[1]["schema_version"], "1.1.0")
 
 
 class TestDataclassInput(unittest.TestCase):
