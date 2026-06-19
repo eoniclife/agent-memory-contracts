@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Iterable, TypeVar, cast
 
+from ._supersession import validate_acyclic_supersession_graph
 from .taste_ids import make_taste_card_id, make_taste_reducer_decision_id
 
 T = TypeVar("T")
@@ -441,6 +442,10 @@ def validate_taste_bundle(
                 <= parse_iso8601(cast(str, newer.valid_from)),
                 "superseded TasteCard valid_until must be <= successor valid_from",
             )
+    validate_acyclic_supersession_graph(
+        cards_by_id,
+        record_kind="TasteCard",
+    )
 
 
 def is_taste_card_active_at(card: dict[str, Any], query_time: str) -> bool:
@@ -485,9 +490,17 @@ def taste_cards_as_of(cards: Iterable[dict[str, Any]], query_time: str) -> list[
 def taste_supersession_chain(card_id: str, cards: Iterable[dict[str, Any]]) -> list[str]:
     by_id = {card["id"]: card for card in cards}
     chain = [card_id]
+    seen = {card_id}
     current = by_id.get(card_id)
     while current and current.get("superseded_by"):
         next_id = current["superseded_by"][0]
+        if next_id in seen:
+            cycle = chain + [next_id]
+            raise ValueError(
+                "TasteCard supersession cycle detected: "
+                + " -> ".join(cycle)
+            )
         chain.append(next_id)
+        seen.add(next_id)
         current = by_id.get(next_id)
     return chain

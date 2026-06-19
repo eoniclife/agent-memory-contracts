@@ -196,6 +196,17 @@ class TasteQueryTests(unittest.TestCase):
         chain = taste_supersession_chain(c1.id, [asdict(c1), asdict(c2)])
         self.assertEqual(chain, [c1.id, c2.id])
 
+    def test_supersession_chain_rejects_cycles(self):
+        source, span = build_source_and_span()
+        c1 = _card(source.id, span.id, "v1")
+        c2 = _card(source.id, span.id, "v2")
+        d1 = asdict(c1)
+        d2 = asdict(c2)
+        d1["superseded_by"] = [c2.id]
+        d2["superseded_by"] = [c1.id]
+        with self.assertRaisesRegex(ValueError, "TasteCard supersession cycle detected"):
+            taste_supersession_chain(c1.id, [d1, d2])
+
 
 class TasteBundleTests(unittest.TestCase):
     def test_taste_bundle_validates(self):
@@ -236,6 +247,54 @@ class TasteBundleTests(unittest.TestCase):
             taste_reducer_decisions=[reducer_dict],
             taste_cards=[card_dict],
         )
+
+    def test_supersession_cycle_is_rejected(self):
+        source, span = build_source_and_span()
+        c1 = _card(source.id, span.id, "v1")
+        c2 = _card(source.id, span.id, "v2")
+        d1 = asdict(c1)
+        d2 = asdict(c2)
+        rid = make_taste_reducer_decision_id(
+            "supersede", [], [c1.id, c2.id], [span.id], "ok"
+        )
+        reducer_dict = {
+            "id": rid,
+            "schema_version": "1.0.0",
+            "decision_type": "supersede",
+            "target_taste_signal_ids": [],
+            "target_taste_card_ids": [c1.id, c2.id],
+            "evidence_span_ids": [span.id],
+            "rationale": "ok",
+            "decided_by": {"agent": "taste-reducer", "model": "gpt-5.5", "tool": None, "prompt_ref": None},
+            "decided_at": T_DECIDED,
+            "confidence": "high",
+            "risk_class": "low",
+            "checks": {
+                "provenance": "pass", "specificity": "pass",
+                "example_grounding": "pass", "contrast_grounding": "pass",
+                "privacy": "pass", "usefulness": "pass",
+            },
+            "metadata": {},
+        }
+        for card, successor, predecessor in (
+            (d1, c2.id, c2.id),
+            (d2, c1.id, c1.id),
+        ):
+            card["status"] = "superseded"
+            card["reducer_decision_id"] = rid
+            card["superseded_by"] = [successor]
+            card["supersedes"] = [predecessor]
+            card["valid_until"] = T_DECIDED
+
+        with self.assertRaisesRegex(ValueError, "TasteCard supersession cycle detected"):
+            validate_taste_bundle(
+                source_records=[asdict(source)],
+                episode_records=[],
+                evidence_spans=[asdict(span)],
+                candidate_records=[],
+                taste_reducer_decisions=[reducer_dict],
+                taste_cards=[d1, d2],
+            )
 
     def test_taste_bundle_rejects_card_not_in_reducer_target(self):
         source, span = build_source_and_span()

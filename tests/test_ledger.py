@@ -47,12 +47,21 @@ def _build_candidate_record(span_id: str) -> dict:
     }
 
 
-def _reducer(target_candidate_ids: list[str], target_ledger_ids: list[str], span_ids: list[str], rationale: str = "ok") -> MemoryReducerDecision:
-    reducer_id = make_reducer_decision_id("promote", target_candidate_ids, target_ledger_ids, span_ids, rationale)
+def _reducer(
+    target_candidate_ids: list[str],
+    target_ledger_ids: list[str],
+    span_ids: list[str],
+    rationale: str = "ok",
+    *,
+    decision_type: str = "promote",
+) -> MemoryReducerDecision:
+    reducer_id = make_reducer_decision_id(
+        decision_type, target_candidate_ids, target_ledger_ids, span_ids, rationale
+    )
     return MemoryReducerDecision.from_dict({
         "id": reducer_id,
         "schema_version": "1.0.0",
-        "decision_type": "promote",
+        "decision_type": decision_type,
         "target_candidate_ids": target_candidate_ids,
         "target_ledger_entry_ids": target_ledger_ids,
         "evidence_span_ids": span_ids,
@@ -69,10 +78,16 @@ def _reducer(target_candidate_ids: list[str], target_ledger_ids: list[str], span
     })
 
 
-def _preference_entry(source_id: str, span_id: str, candidate_id: str, reducer_id: str) -> PreferenceLedgerEntry:
+def _preference_entry(
+    source_id: str,
+    span_id: str,
+    candidate_id: str,
+    reducer_id: str,
+    preference_text: str = "Spec-text drift is worse than no spec",
+) -> PreferenceLedgerEntry:
     entry_id = make_ledger_entry_id("preference", [span_id], {
         "ledger_type": "preference", "subject": "memory architecture",
-        "preference_text": "Spec-text drift is worse than no spec",
+        "preference_text": preference_text,
         "domain": "architecture", "scope": "global",
         "valid_from": T_DECIDED, "evidence_span_ids": [span_id],
     })
@@ -89,7 +104,7 @@ def _preference_entry(source_id: str, span_id: str, candidate_id: str, reducer_i
         "candidate_ids": [candidate_id],
         "reducer_decision_id": reducer_id,
         "subject": "memory architecture",
-        "preference_text": "Spec-text drift is worse than no spec",
+        "preference_text": preference_text,
         "domain": "architecture",
         "strength": "hard_constraint",
         "observed_at": "2026-05-30T12:00:00Z",
@@ -262,6 +277,44 @@ class BundleValidationTests(unittest.TestCase):
             "metadata": {},
         })
         with self.assertRaises(ValueError):
+            validate_ledger_bundle(
+                source_records=[asdict(source)],
+                episode_records=[],
+                evidence_spans=[asdict(span)],
+                candidate_records=[candidate_dict],
+                reducer_decisions=[asdict(reducer)],
+                ledger_entries=[e1, e2],
+            )
+
+    def test_supersession_cycle_is_rejected(self):
+        source, span = build_source_and_span()
+        candidate_dict = _build_candidate_record(span.id)
+        candidate_id = candidate_dict["id"]
+        entry1 = _preference_entry(
+            source.id, span.id, candidate_id, "redmem_pending", "v1"
+        )
+        entry2 = _preference_entry(
+            source.id, span.id, candidate_id, "redmem_pending", "v2"
+        )
+        e1 = asdict(entry1)
+        e2 = asdict(entry2)
+        reducer = _reducer(
+            [candidate_id],
+            [e1["id"], e2["id"]],
+            [span.id],
+            decision_type="supersede",
+        )
+        for entry, successor, predecessor in (
+            (e1, e2["id"], e2["id"]),
+            (e2, e1["id"], e1["id"]),
+        ):
+            entry["status"] = "superseded"
+            entry["reducer_decision_id"] = reducer.id
+            entry["superseded_by"] = [successor]
+            entry["supersedes"] = [predecessor]
+            entry["valid_until"] = T_DECIDED
+
+        with self.assertRaisesRegex(ValueError, "ledger supersession cycle detected"):
             validate_ledger_bundle(
                 source_records=[asdict(source)],
                 episode_records=[],

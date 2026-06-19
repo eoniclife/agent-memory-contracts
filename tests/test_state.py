@@ -16,6 +16,7 @@ from agent_memory_contracts import (
     current_project_states,
     is_project_state_active_at,
     StateReducerDecision,
+    validate_state_bundle,
 )
 
 from .fixtures import T_DECIDED, build_source_and_span
@@ -140,6 +141,73 @@ class StateQueryTests(unittest.TestCase):
         s1 = project_state_from_dict(d1)
         chain = project_state_supersession_chain(s1.id, [asdict(s1), asdict(s2)])
         self.assertEqual(chain, [s1.id, s2.id])
+
+    def test_project_state_supersession_chain_rejects_cycles(self):
+        _, span = build_source_and_span()
+        s1 = _project_state("p1", span.id, "2026-05-30T13:00:00Z", "v1")
+        s2 = _project_state("p1", span.id, "2026-05-30T18:00:00Z", "v2")
+        d1 = asdict(s1)
+        d2 = asdict(s2)
+        d1["superseded_by"] = [s2.id]
+        d2["superseded_by"] = [s1.id]
+        with self.assertRaisesRegex(ValueError, "state supersession cycle detected"):
+            project_state_supersession_chain(s1.id, [d1, d2])
+
+    def test_state_bundle_rejects_supersession_cycle(self):
+        source, span = build_source_and_span()
+        s1 = _project_state("p1", span.id, "2026-05-30T13:00:00Z", "v1")
+        s2 = _project_state("p1", span.id, "2026-05-30T18:00:00Z", "v2")
+        d1 = asdict(s1)
+        d2 = asdict(s2)
+        rid = make_state_reducer_decision_id(
+            "supersede", [s1.id, s2.id], [], [span.id], [], [], "ok"
+        )
+        reducer_dict = {
+            "id": rid,
+            "schema_version": "1.0.0",
+            "decision_type": "supersede",
+            "target_project_state_ids": [s1.id, s2.id],
+            "target_core_state_ids": [],
+            "source_record_ids": [],
+            "episode_record_ids": [],
+            "evidence_span_ids": [span.id],
+            "ledger_entry_ids": [],
+            "taste_card_ids": [],
+            "rationale": "ok",
+            "decided_by": {"agent": "state-reducer", "model": "gpt-5.5", "tool": None, "prompt_ref": None},
+            "decided_at": T_DECIDED,
+            "confidence": "high",
+            "risk_class": "low",
+            "checks": {
+                "provenance": "pass", "temporal_validity": "pass",
+                "state_consistency": "pass", "privacy": "pass",
+                "usefulness": "pass",
+            },
+            "metadata": {},
+        }
+        for state, successor, predecessor in (
+            (d1, s2.id, s2.id),
+            (d2, s1.id, s1.id),
+        ):
+            state["status"] = "superseded"
+            state["reducer_decision_id"] = rid
+            state["superseded_by"] = [successor]
+            state["supersedes"] = [predecessor]
+            state["valid_from"] = T_DECIDED
+            state["valid_until"] = T_DECIDED
+
+        with self.assertRaisesRegex(ValueError, "state supersession cycle detected"):
+            validate_state_bundle(
+                source_records=[asdict(source)],
+                episode_records=[],
+                evidence_spans=[asdict(span)],
+                candidate_records=[],
+                ledger_entries=[],
+                taste_cards=[],
+                state_reducer_decisions=[reducer_dict],
+                project_states=[d1, d2],
+                core_states=[],
+            )
 
 
 class StateReducerTests(unittest.TestCase):
