@@ -17,12 +17,13 @@ separate governed-memory wrapper/control-plane repo.
 - `AccessDecision` and `AccessSummary` now expose machine-readable reason,
   privacy, and record-type metadata while preserving legacy constructors and
   equality behavior.
-- LangChain integration claims are corrected: `ContractsMemory` records
-  conversation turns as source/episode/evidence trace and returns a
-  ContextPack-shaped memory variable. It does not promote turns into trusted
-  ledger facts.
+- LangChain integration claims are corrected and guarded by tests:
+  `ContractsMemory` records conversation turns as validator-valid
+  source/episode/evidence trace and returns a legacy `context_pack`
+  session-trace envelope. It does not promote turns into trusted ledger facts
+  or return a full `ContextPack` record.
 - `ContractsMemoryConfig.privacy_class` is now applied to generated
-  source/span trace records.
+  source/span trace records, and shared-session privacy conflicts fail closed.
 - Public docs now define three stability tiers: stable core, reference
   runtime, and optional integrations.
 - Package metadata now uses modern SPDX license fields for cleaner release
@@ -45,7 +46,9 @@ separate governed-memory wrapper/control-plane repo.
 - No schema migration required.
 - Existing public constructors and positional calling conventions are
   preserved.
-- Existing semantic ID bytes are preserved.
+- Existing core ID-helper bytes are preserved. Newly generated LangChain
+  adapter trace IDs change because the adapter now uses valid
+  source/episode/locator vocabularies.
 - Existing bundle fingerprint defaults are preserved; stricter duplicate
   handling is opt-in.
 

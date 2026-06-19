@@ -50,11 +50,13 @@ v1.2.0; no schema migration required.
   stable core, reference runtime, and optional integrations. Product work is
   framed as a separate governed-memory wrapper/control plane with
   observe/overlay/enforce modes, not as this library becoming a hosted product.
-- The LangChain integration docs now state the precise behavior: it records
-  conversation turns as source/episode/evidence trace and returns a
-  ContextPack-shaped memory variable. It does not promote turns into trusted
-  facts or run a reducer. Generated source/span privacy now honors
-  `ContractsMemoryConfig.privacy_class`.
+- The LangChain integration now states and enforces the precise behavior: it
+  records conversation turns as validator-valid source/episode/evidence trace
+  and returns a legacy `context_pack` session-trace envelope. It does not
+  promote turns into trusted facts, run a reducer, or return a full
+  `ContextPack` record. Generated source/span privacy now honors
+  `ContractsMemoryConfig.privacy_class`, and shared-session privacy conflicts
+  fail closed.
 - The README badge now points at the live PyPI package version instead of a
   static TestPyPI release marker.
 - Packaging metadata now uses the SPDX `license` string and `license-files`
@@ -358,9 +360,10 @@ in the core.
   Each `save_context` call records the conversation turn as
   an `EpisodeRecord` with two `EvidenceSpan` records (one for
   the input, one for the output). Each `load_memory_variables`
-  call returns a session-shaped context_pack (a subset of the
-  full `ContextPack` shape) containing the most-recent N
-  episodes, their evidence, and the conversation source.
+  call returns a legacy `context_pack` session-trace envelope
+  containing the most-recent N episodes, their evidence, and
+  the conversation source. That envelope is not a full
+  `ContextPack` record.
 
   The integration is the proof that the library is composable
   with the most popular LLM framework. The chain gets

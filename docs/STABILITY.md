@@ -42,9 +42,10 @@ end-to-end and so product-side ports have a conformance target.
 
 The runtime's public classes and functions are SemVer-governed, but
 the sqlite3 implementation is not a production service recommendation.
-A product may port the `StorageBackend`, expose HTTP/MCP/console
-surfaces, or wrap existing memory systems; the invariant suite remains
-the acceptance gate.
+`StorageBackend` describes the shared read/query surface. A production
+backend ports gate and store semantics together, exposes any
+HTTP/MCP/console surfaces outside this library, and treats the invariant
+suite as the acceptance gate.
 
 ### Optional Integrations
 
@@ -57,9 +58,10 @@ third-party packages and host applications.
 These integrations do not, by themselves, claim end-to-end memory
 enforcement for an agent application. The LangChain adapter records
 conversation turns as source/episode/evidence trace and returns a
-ContextPack-shaped memory variable; it does not promote turns into
-trusted facts. The MCP adapter exposes contract operations over FastMCP;
-it is not a hosted control plane.
+legacy `context_pack` session-trace envelope; it does not promote turns
+into trusted facts or return a full `ContextPack` record. The MCP
+adapter exposes contract operations over FastMCP; it is not a hosted
+control plane.
 
 ---
 
@@ -183,6 +185,7 @@ audit script `scripts/audit_public_api.py` walks
 | `DuplicateRecordError` | `bundles` | Strict duplicate-id error with record fingerprints |
 | `bundle_fingerprint` | `bundles` | SHA-256 fingerprint of a bundle |
 | `record_fingerprint` | `bundles` | SHA-256 fingerprint of one canonical record |
+| `BundleDiff` | `bundle_diff` | The result of a set-semantic bundle diff |
 | `bundle_diff` | `bundle_diff` | Set-semantic diff of two bundles |
 | `merge_bundles` | `merge` | Set-semantic merge of N bundles |
 | `BundleMerge` | `merge` | The result of a merge (with conflict list) |
@@ -339,8 +342,9 @@ The runtime subpackage is a complete, stdlib-only (sqlite3)
 governed memory records. The contracts above define *what* a
 record is; the runtime defines *how* a runtime holds and moves
 them. Product-side ports, services, adapters, and control planes
-plug in via the `StorageBackend` protocol and the invariant suite;
-the sqlite3 implementation is the acceptance reference.
+share the `StorageBackend` read/query surface, port gate/store
+semantics together, and use the invariant suite as the acceptance
+gate; the sqlite3 implementation is the acceptance reference.
 
 The runtime is a **reference**, not a recommendation for
 production. Its purpose is to (a) make the contract semantics

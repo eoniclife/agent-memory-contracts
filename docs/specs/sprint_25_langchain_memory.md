@@ -12,7 +12,8 @@ The original planning draft overstated the LangChain adapter as writing
 trusted ledger entries and reducer decisions. The shipped adapter is narrower:
 `ContractsMemory.save_context()` records conversation turns as a session
 `SourceRecord`, `EpisodeRecord`, and input/output `EvidenceSpan` records, then
-`load_memory_variables()` returns a ContextPack-shaped session trace. It does
+`load_memory_variables()` returns a legacy `context_pack` session-trace
+envelope. That envelope is not a full `ContextPack` record. The adapter does
 not promote turns into trusted facts, run a reducer, or make a LangChain
 application's whole memory stack poisoning-resistant.
 
@@ -82,7 +83,7 @@ trusted-fact channel.
            │ read/write
            ▼
 ┌─────────────────────┐
-│ Bundle + ContextPack│  ◄── v1.0.0 final
+│ Bundle + trace env. │  ◄── v1.0.0 final
 └─────────────────────┘
 ```
 
@@ -91,8 +92,8 @@ trusted-fact channel.
 
 - Holds a `MemoryStore` (an in-memory list of bundles, indexed
   by `session_id`).
-- On `load_memory_variables`, returns a ContextPack-shaped session
-  trace for the active session.
+- On `load_memory_variables`, returns a legacy `context_pack`
+  session-trace envelope for the active session.
 - On `save_context`, records the new turn's input/output as one
   `EpisodeRecord` plus input/output `EvidenceSpan` records under a
   session `SourceRecord`, and appends to the bundle.
@@ -104,7 +105,7 @@ trusted-fact channel.
 | --- | --- | --- |
 | `ContractsMemory` | `integrations.langchain` | A `BaseMemory` subclass wrapping the library |
 | `MemoryStore` | `integrations.langchain` | A bundle store, indexed by session id |
-| `ContractsMemoryConfig` | `integrations.langchain` | Configuration: privacy class, max_bundles, max_records_per_load, and build metadata |
+| `ContractsMemoryConfig` | `integrations.langchain` | Configuration: privacy class, max_bundles, max_records_per_load, and compatibility-retained metadata fields |
 
 `integrations.langchain` is a module. It imports
 `langchain_classic.base_memory.BaseMemory` and re-exports the 3 names.
@@ -167,14 +168,15 @@ ContractsMemory` and use it as a drop-in `memory=` arg.
    does not map cleanly.
 7. **No `ConversationBufferWindowMemory` integration.** Same
    reason. A buffer window is a "last N messages" abstraction;
-   this adapter returns a ContextPack-shaped trace.
-8. **`load_memory_variables` returns a single `ContextPack`-shaped
-   dict**, not a list of message strings. The chain's prompt
-   template references `memory["context_pack"]` and formats it
-   via `context_pack_to_dict()`.
+   this adapter returns a session trace envelope under a legacy
+   `context_pack` key.
+8. **`load_memory_variables` returns a single session-trace
+   dict**, not a list of message strings and not a full `ContextPack`
+   record. The chain's prompt template references
+   `memory["context_pack"]` and formats the envelope directly.
 9. **`ContractsMemory.memory_variables == ["context_pack"]`.**
    Exactly one variable. The dict it returns is keyed by
-   `context_pack` and contains the `ContextPack` as a dict.
+   `context_pack` and contains the session-trace envelope as a dict.
 
 ### Bigger defaults
 
@@ -302,6 +304,6 @@ shape, not the body.
 This sprint ships a 1-line LangChain integration: replace
 `ConversationBufferMemory()` with `ContractsMemory()` and the
 chain records turns as source/episode/evidence trace with a
-ContextPack-shaped read surface. It is proof that the library
-is composable with the most popular LLM framework, while keeping
-trusted-fact promotion outside this adapter.
+legacy `context_pack` session-trace read surface. It is proof
+that the library is composable with the most popular LLM framework,
+while keeping trusted-fact promotion outside this adapter.

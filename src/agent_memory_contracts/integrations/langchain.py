@@ -9,12 +9,13 @@ The integration exposes three public names:
 
 - :class:`ContractsMemory` — a ``BaseMemory`` subclass that
   treats each conversation turn as an EpisodeRecord plus input/output
-  EvidenceSpan records and returns a ContextPack-shaped session trace
-  on read.
+  EvidenceSpan records and returns a legacy ``context_pack`` memory
+  variable containing a session-trace envelope on read.
 - :class:`MemoryStore` — an in-memory, session-indexed bundle
   store with a soft ``max_bundles`` eviction policy.
 - :class:`ContractsMemoryConfig` — configuration: privacy class,
-  max_bundles, max_records_per_load, and build-receipt metadata.
+  max_bundles, max_records_per_load, and compatibility-retained
+  metadata fields.
 
 The integration is a thin shim around the v1.x library. It maps
 LangChain's "input + output" shape onto the library's
@@ -53,7 +54,6 @@ if TYPE_CHECKING:
 
 # Library imports — always available, core library is stdlib-only.
 from agent_memory_contracts import (
-    ContextPack,
     EpisodeRecord,
     EvidenceSpan,
     SourceRecord,
@@ -61,6 +61,7 @@ from agent_memory_contracts import (
     make_source_id,
     make_span_id,
 )
+from agent_memory_contracts.evidence_contracts import PRIVACY_CLASSES
 
 
 PrivacyClassStr = Literal["public", "internal", "private", "sensitive", "highly_sensitive"]
@@ -86,19 +87,18 @@ class ContractsMemoryConfig:
         max_records_per_load: Cap on the number of episodes
             returned by ``load_memory_variables``. Defaults
             to 20.
-        builder_agent: The agent name recorded on the
-            ``BuildReceipt``. Defaults to
-            ``"agent_memory_contracts.integrations.langchain"``.
-        builder_model: The model name recorded on the
-            ``BuildReceipt``. Defaults to ``"none"``
-            (no LLM involvement in compile).
-        exclude_stale: Whether to exclude ``stale`` records
-            from the compiled context_pack. Defaults to
-            ``True`` (matches the library's default).
-        exclude_retracted: Whether to exclude ``retracted``
-            records. Defaults to ``True``.
-        exclude_contested: Whether to exclude ``contested``
-            records. Defaults to ``True``.
+        builder_agent: Compatibility-retained metadata field
+            from the earlier adapter draft. The current session-trace
+            envelope does not build a receipt.
+        builder_model: Compatibility-retained metadata field.
+            Defaults to ``"none"``.
+        exclude_stale: Compatibility-retained field. The adapter
+            stores source/episode/evidence trace only and does not
+            filter stale records.
+        exclude_retracted: Compatibility-retained field; currently
+            unused by the session-trace envelope.
+        exclude_contested: Compatibility-retained field; currently
+            unused by the session-trace envelope.
     """
 
     privacy_class: PrivacyClassStr = "internal"
@@ -109,6 +109,10 @@ class ContractsMemoryConfig:
     exclude_stale: bool = True
     exclude_retracted: bool = True
     exclude_contested: bool = True
+
+    def __post_init__(self) -> None:
+        if self.privacy_class not in PRIVACY_CLASSES:
+            raise ValueError(f"invalid privacy_class: {self.privacy_class!r}")
 
 
 @dataclass
@@ -235,31 +239,33 @@ def _session_source(
 ) -> dict[str, Any]:
     """Build a SourceRecord dict for a session.
 
-    One source per session. The session id is the
-    ``raw_ref["session_id"]`` value; the content hash is
-    the hash of the session id (so it is stable across
-    runs of the same session).
+    One source per session. The raw reference uses a supported
+    synthetic fixture shape so the generated record can pass the
+    same validators as normal evidence-plane records.
     """
     text = f"conversation-session:{session_id}"
-    src = SourceRecord(
-        id=make_source_id(
-            "conversation", {"session_id": session_id}, _hash_text(text)
-        ),
-        schema_version="1.0.0",
-        source_type="conversation",
-        title=f"Conversation session {session_id}",
-        origin_uri=None,
-        raw_ref={"session_id": session_id, "kind": "langchain"},
-        content_hash_sha256=_hash_text(text),
-        captured_at=_now_iso(),
-        observed_at=_now_iso(),
-        author_or_sender=None,
-        participants=["user", "assistant"],
-        privacy_class=privacy_class,
-        custody_status="parsed",
-        parser_version="1.0.0",
-        metadata={},
-    )
+    content_hash = _hash_text(text)
+    raw_ref = {
+        "kind": "synthetic_fixture",
+        "value": f"langchain-session:{session_id}",
+    }
+    src = SourceRecord.from_dict({
+        "id": make_source_id("other", raw_ref, content_hash),
+        "schema_version": "1.0.0",
+        "source_type": "other",
+        "title": f"Conversation session {session_id}",
+        "origin_uri": None,
+        "raw_ref": raw_ref,
+        "content_hash_sha256": content_hash,
+        "captured_at": _now_iso(),
+        "observed_at": _now_iso(),
+        "author_or_sender": None,
+        "participants": ["user", "assistant"],
+        "privacy_class": privacy_class,
+        "custody_status": "synthetic",
+        "parser_version": "1.0.0",
+        "metadata": {"integration": "langchain", "session_id": session_id},
+    })
     return dataclasses.asdict(src)
 
 
@@ -283,62 +289,70 @@ def _turn_records(
     not engaged: a conversation turn is a sequence of
     episodes, not a fact ledger. The integration stores
     the raw conversation as a structured trace; the chain
-    consumes it as the context_pack.
+    consumes it through the legacy ``context_pack`` memory
+    variable.
 
     Returns a dict with the bundle-shaped lists (each
     containing one record).
     """
-    locator_kind = "turn"
+    locator_kind = "ordinal"
     locator_value = str(turn_index)
-
-    # Episode
-    ep_id = make_episode_id(source_id, "turn", locator_kind, locator_value)
     input_text = _stringify_value(inputs)
     output_text = _stringify_value(outputs)
-    episode = EpisodeRecord(
-        id=ep_id,
-        schema_version="1.0.0",
-        source_id=source_id,
-        episode_type="turn",
-        episode_locator={"kind": locator_kind, "value": locator_value},
-        title=f"Turn {turn_index} of session {session_id}",
-        summary=(output_text or input_text)[:200],
-        event_time_start=None,
-        event_time_end=None,
-        actors=["user", "assistant"],
-        topics=[],
-        project_refs=[],
-        evidence_span_ids=[],
-        metadata={"turn_index": turn_index, "session_id": session_id},
-    )
 
     # Two evidence spans: input and output
-    input_span_id = make_span_id(source_id, "turn_input", locator_value)
-    output_span_id = make_span_id(source_id, "turn_output", locator_value)
-    input_span = EvidenceSpan(
-        id=input_span_id,
-        schema_version="1.0.0",
-        source_id=source_id,
-        episode_id=ep_id,
-        locator={"kind": "turn_input", "value": locator_value},
-        text_excerpt=input_text,
-        excerpt_policy="verbatim",
-        span_hash_sha256=_hash_text(input_text),
-        privacy_class=privacy_class,
-        metadata={},
+    input_locator_value = f"{turn_index}:input"
+    output_locator_value = f"{turn_index}:output"
+    input_span_id = make_span_id(source_id, "message_range", input_locator_value)
+    output_span_id = make_span_id(source_id, "message_range", output_locator_value)
+
+    # Episode
+    ep_id = make_episode_id(
+        source_id,
+        "conversation_segment",
+        locator_kind,
+        locator_value,
     )
-    output_span = EvidenceSpan(
-        id=output_span_id,
-        schema_version="1.0.0",
-        source_id=source_id,
-        episode_id=ep_id,
-        locator={"kind": "turn_output", "value": locator_value},
-        text_excerpt=output_text,
-        excerpt_policy="verbatim",
-        span_hash_sha256=_hash_text(output_text),
-        privacy_class=privacy_class,
-        metadata={},
-    )
+    episode = EpisodeRecord.from_dict({
+        "id": ep_id,
+        "schema_version": "1.0.0",
+        "source_id": source_id,
+        "episode_type": "conversation_segment",
+        "episode_locator": {"kind": locator_kind, "value": locator_value},
+        "title": f"Turn {turn_index} of session {session_id}",
+        "summary": (output_text or input_text)[:200],
+        "event_time_start": None,
+        "event_time_end": None,
+        "actors": ["user", "assistant"],
+        "topics": [],
+        "project_refs": [],
+        "evidence_span_ids": [input_span_id, output_span_id],
+        "metadata": {"turn_index": turn_index, "session_id": session_id},
+    })
+    input_span = EvidenceSpan.from_dict({
+        "id": input_span_id,
+        "schema_version": "1.0.0",
+        "source_id": source_id,
+        "episode_id": ep_id,
+        "locator": {"kind": "message_range", "value": input_locator_value},
+        "text_excerpt": input_text,
+        "excerpt_policy": "short_quote_allowed",
+        "span_hash_sha256": _hash_text(input_text),
+        "privacy_class": privacy_class,
+        "metadata": {"role": "input", "turn_index": turn_index},
+    })
+    output_span = EvidenceSpan.from_dict({
+        "id": output_span_id,
+        "schema_version": "1.0.0",
+        "source_id": source_id,
+        "episode_id": ep_id,
+        "locator": {"kind": "message_range", "value": output_locator_value},
+        "text_excerpt": output_text,
+        "excerpt_policy": "short_quote_allowed",
+        "span_hash_sha256": _hash_text(output_text),
+        "privacy_class": privacy_class,
+        "metadata": {"role": "output", "turn_index": turn_index},
+    })
 
     bundle = _empty_bundle()
     bundle["source_records"].append(source_dict)
@@ -378,7 +392,7 @@ def _context_pack_to_dict(
     bundle: list[dict[str, Any]],
     max_records: int,
 ) -> dict[str, Any]:
-    """Build a context_pack dict for the session.
+    """Build the legacy ``context_pack`` session-trace envelope.
 
     The integration does not use the library's
     :func:`compile_context_pack` because that compiler
@@ -389,13 +403,14 @@ def _context_pack_to_dict(
     episode, sources listed once.
 
     Returns a dict with a ``context_pack_id``, a list of
-    ``records`` (each an episode dict), and an
-    ``evidence`` list (each a span dict). The shape is a
-    subset of the full :class:`ContextPack` shape.
+    ``records`` (each an episode dict), and an ``evidence``
+    list (each a span dict). This is not a valid ContextPack
+    record and has no build receipt, authority block, trusted
+    memory, or reducer semantics.
     """
     episodes = [
         r for r in bundle
-        if r.get("episode_type") == "turn"
+        if r.get("episode_type") == "conversation_segment"
     ]
     episodes = episodes[-max_records:]  # most-recent N
     ep_ids = {e["id"] for e in episodes}
@@ -405,7 +420,8 @@ def _context_pack_to_dict(
     ]
     sources = [
         r for r in bundle
-        if r.get("source_type") == "conversation"
+        if r.get("metadata", {}).get("integration") == "langchain"
+        and r.get("metadata", {}).get("session_id") == session_id
     ]
     return {
         "context_pack_id": f"cpsess_{session_id}",
@@ -415,6 +431,7 @@ def _context_pack_to_dict(
         "sources": sources,
         "metadata": {
             "builder": "agent_memory_contracts.integrations.langchain",
+            "envelope_type": "langchain_session_trace",
             "schema_version": "1.0.0",
         },
     }
@@ -436,8 +453,10 @@ if _LANGCHAIN_BASE_MEMORY is not None:
         reducer decisions.
 
         Each call to :meth:`load_memory_variables` returns a
-        ContextPack-shaped session trace. The context_pack is
-        the memory variable; chains reference it via
+        legacy ``context_pack`` memory variable containing a
+        session-trace envelope. It is not a valid ContextPack
+        and carries no build receipt or trusted-memory semantics.
+        Chains reference it via
         ``memory_variables=["context_pack"]``.
 
         Example:
@@ -452,8 +471,8 @@ if _LANGCHAIN_BASE_MEMORY is not None:
             memory = ContractsMemory(session_id="my-session")
             chain = ConversationChain(llm=OpenAI(), memory=memory)
             # Each chain.run() call triggers save_context,
-            # which records the turn. Subsequent calls
-            # compile a context_pack for the same session.
+            # which records the turn. Subsequent calls load
+            # the trace envelope for the same session.
             ```
         """
 
@@ -510,13 +529,12 @@ if _LANGCHAIN_BASE_MEMORY is not None:
         def load_memory_variables(
             self, inputs: dict[str, Any]
         ) -> dict[str, dict[str, Any]]:
-            """Compile a context_pack for the session and return it as a dict.
+            """Return the session trace under the legacy context_pack key.
 
             The returned dict has one key, ``"context_pack"``,
-            and the value is a session-shaped dict (a subset
-            of the full :class:`ContextPack` shape) containing
-            the most-recent N episodes, their evidence, and
-            the source.
+            and the value is a session-trace envelope containing
+            the most-recent N episodes, their evidence, and the
+            source. It is not a valid ContextPack record.
             """
             merged = self.store.get_merged(self.session_id)
             if not merged:
@@ -538,7 +556,11 @@ if _LANGCHAIN_BASE_MEMORY is not None:
             # Build (or fetch) the session source.
             existing = self.store.get_merged(self.session_id)
             existing_source = next(
-                (r for r in existing if r.get("source_type") == "conversation"),
+                (
+                    r for r in existing
+                    if r.get("metadata", {}).get("integration") == "langchain"
+                    and r.get("metadata", {}).get("session_id") == self.session_id
+                ),
                 None,
             )
             if existing_source is None:
@@ -547,6 +569,12 @@ if _LANGCHAIN_BASE_MEMORY is not None:
                     privacy_class=self.config.privacy_class,
                 )
             else:
+                if existing_source.get("privacy_class") != self.config.privacy_class:
+                    raise ValueError(
+                        "shared LangChain memory session already has "
+                        f"privacy_class={existing_source.get('privacy_class')!r}; "
+                        f"got {self.config.privacy_class!r}"
+                    )
                 source = existing_source
             source_id = source["id"]
             turn_bundle = _turn_records(
