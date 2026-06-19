@@ -341,8 +341,41 @@ class SchemaMigrator:
         if not target_version:
             raise ValueError("target_version is required")
         records = list(bundle)
-        path = self.find_path(_infer_start_version(records), target_version)
-        return apply_migrations(records, path, target_version=target_version)
+        if not records:
+            path = self.find_path(DEFAULT_RECORD_VERSION, target_version)
+            return apply_migrations(records, path, target_version=target_version)
+
+        record_dicts = [_to_dict(record) for record in records]
+        record_versions = [_record_schema_version(record) for record in record_dicts]
+        paths_by_version: dict[str, list[MigrationStep]] = {}
+        for version in dict.fromkeys(record_versions):
+            paths_by_version[version] = self.find_path(version, target_version)
+
+        result_records: list[Any] = []
+        records_migrated = 0
+        records_unchanged = 0
+        steps_used: set[tuple[str, str]] = set()
+
+        for record_dict, start_version in zip(
+            record_dicts, record_versions, strict=True
+        ):
+            result = apply_migrations(
+                [record_dict],
+                paths_by_version[start_version],
+                target_version=target_version,
+            )
+            result_records.extend(result.bundle)
+            records_migrated += result.records_migrated
+            records_unchanged += result.records_unchanged
+            steps_used.update(result.steps_applied)
+
+        return MigrationResult(
+            bundle=result_records,
+            target_version=target_version,
+            steps_applied=_order_used_steps(self._steps.values(), steps_used),
+            records_migrated=records_migrated,
+            records_unchanged=records_unchanged,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -530,19 +563,42 @@ def _to_dict(record: Any) -> dict[str, Any]:
     return dict(record)
 
 
-def _infer_start_version(records: list[Any]) -> str:
-    """Infer the start version of a bundle for path-finding.
+def _record_schema_version(record: dict[str, Any]) -> str:
+    """Return the record's schema version for migration path lookup."""
+    return str(record.get("schema_version", DEFAULT_RECORD_VERSION))
 
-    Returns the version of the first record that has a
-    ``schema_version`` field. If all records lack the
-    field, returns :data:`DEFAULT_RECORD_VERSION`.
+
+def _order_used_steps(
+    registered_steps: Iterable[MigrationStep],
+    used_steps: set[tuple[str, str]],
+) -> tuple[tuple[str, str], ...]:
+    """Return used migration steps in dependency order.
+
+    Independent steps use registration order as a stable tie-breaker.
     """
-    for record in records:
-        d = _to_dict(record)
-        v = d.get("schema_version")
-        if isinstance(v, str) and v:
-            return v
-    return DEFAULT_RECORD_VERSION
+    registration_index = {
+        (step.from_version, step.to_version): index
+        for index, step in enumerate(registered_steps)
+    }
+    remaining = set(used_steps)
+    ordered: list[tuple[str, str]] = []
+
+    while remaining:
+        ready = [
+            step
+            for step in remaining
+            if not any(previous[1] == step[0] for previous in remaining)
+        ]
+        if not ready:
+            ready = list(remaining)
+        ready.sort(
+            key=lambda step: registration_index.get(step, len(registration_index))
+        )
+        step = ready[0]
+        ordered.append(step)
+        remaining.remove(step)
+
+    return tuple(ordered)
 
 
 def _index_path(
