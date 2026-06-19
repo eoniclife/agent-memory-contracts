@@ -103,6 +103,7 @@ from .contextpack_ids import (
 )
 from .contextpack_validation import validate_contextpack_bundle
 from .bundles import DuplicateRecordError, bundle_fingerprint, record_fingerprint
+from .bundle_diff import BundleDiff, bundle_diff
 from .merge import BundleMerge, merge_bundles
 from .conflict import (
     ConflictResolution,
@@ -181,7 +182,7 @@ from .compilation import (
     compile_context_pack,
 )
 
-__version__ = "1.2.0"
+__version__ = "1.3.0"
 
 __all__ = [
     # Evidence plane
@@ -258,6 +259,8 @@ __all__ = [
     "DuplicateRecordError",
     "bundle_fingerprint",
     "record_fingerprint",
+    "BundleDiff",
+    "bundle_diff",
     "BundleMerge",
     "merge_bundles",
     # Conflict resolution (added in 0.7.0)

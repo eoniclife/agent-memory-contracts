@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-06-19
+
+The "trust-kernel hardening" release. Tightens the integrity layer before the
+governed-memory product work starts: supersession graphs are cycle-safe,
+canonical JSON v1 is documented with golden vectors, record fingerprints are
+separated from semantic ids, duplicate import modes are explicit, access
+decisions are machine-readable, and public docs now define stable core /
+reference runtime / optional integration tiers. Backwards-compatible with
+v1.2.0; no schema migration required.
+
 ### Added
 
 - Canonical JSON v1 is now centralized in a private helper and documented with
@@ -31,6 +41,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   plane-organized records use their bundle plane as the authoritative record
   type, and record-type-only drops do not alter the legacy
   `AccessSummary.by_privacy_class` counts.
+
+### Changed
+
+- Package metadata now reports `1.3.0`.
+- README, architecture, roadmap, migration, and stability docs now describe
+  `agent-memory-contracts` as a trust kernel with three explicit tiers:
+  stable core, reference runtime, and optional integrations. Product work is
+  framed as a separate governed-memory wrapper/control plane with
+  observe/overlay/enforce modes, not as this library becoming a hosted product.
+- The LangChain integration now states and enforces the precise behavior: it
+  records conversation turns as validator-valid source/episode/evidence trace
+  and returns a legacy `context_pack` session-trace envelope. It does not
+  promote turns into trusted facts, run a reducer, or return a full
+  `ContextPack` record. Generated source/span privacy now honors
+  `ContractsMemoryConfig.privacy_class`, and shared-session privacy conflicts
+  fail closed. Shared-store writers for the same session now allocate turn
+  indices from the store so distinct adapters cannot silently reuse
+  episode/span ids.
+- The README badge now points at the live PyPI package version instead of a
+  static TestPyPI release marker.
+- Packaging metadata now uses the SPDX `license` string and `license-files`
+  field with `setuptools>=77`, avoiding the deprecated license table and
+  license classifier path.
 
 ### Fixed
 
@@ -303,11 +336,10 @@ this release.
 
 ### Bottom line
 
-The library is **production-ready. Use it.** The public API
-is frozen; subsequent `1.x.0` releases will add new names but
-will not break existing names. Schema migrations are the only
-backwards-incompatible event, and the `default_migrator()`
-registry is the safety net.
+The stable core public API is frozen; subsequent `1.x.0` releases
+will add new names but will not break existing names. Schema
+migrations are the only backwards-incompatible event, and the
+`default_migrator()` registry is the safety net.
 
 ## [1.0.1] - 2026-06-07
 
@@ -330,9 +362,10 @@ in the core.
   Each `save_context` call records the conversation turn as
   an `EpisodeRecord` with two `EvidenceSpan` records (one for
   the input, one for the output). Each `load_memory_variables`
-  call returns a session-shaped context_pack (a subset of the
-  full `ContextPack` shape) containing the most-recent N
-  episodes, their evidence, and the conversation source.
+  call returns a legacy `context_pack` session-trace envelope
+  containing the most-recent N episodes, their evidence, and
+  the conversation source. That envelope is not a full
+  `ContextPack` record.
 
   The integration is the proof that the library is composable
   with the most popular LLM framework. The chain gets

@@ -156,6 +156,6 @@ cat examples/arthashila_demo/out/audit-pack.md
 - **Repository:** https://github.com/eoniclife/agent-memory-contracts
 - **License:** Apache-2.0
 - **v1.2.0 commit:** `6598124` on `main`
-- **v1.2.0 wheel:** TestPyPI (https://test.pypi.org/project/agent-memory-contracts/)
+- **v1.2.0 package:** PyPI (https://pypi.org/project/agent-memory-contracts/) and TestPyPI (https://test.pypi.org/project/agent-memory-contracts/)
 - **First stable:** v1.0.0 on 2026-06-07
 - **Maintainer:** eoniclife

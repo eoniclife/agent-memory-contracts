@@ -1,0 +1,80 @@
+# v1.3.0 - Trust-kernel hardening
+
+`agent-memory-contracts` is the trust kernel for governed agent memory:
+schemas, content-derived ids, validators, canonicalization, bundle
+operations, audit receipts, access decisions, and a stdlib-only reference
+runtime. v1.3.0 tightens that kernel before product work moves into a
+separate governed-memory wrapper/control-plane repo.
+
+## What changed
+
+- Supersession validation now rejects cycles in every trusted graph.
+- Canonical JSON v1 is centralized and documented with golden vectors.
+- `record_fingerprint(record)` separates full-record payload equality from
+  semantic ids.
+- Bundle fingerprint, diff, and merge support explicit duplicate modes:
+  `last`, `identical`, and `raise`.
+- `AccessDecision` and `AccessSummary` now expose machine-readable reason,
+  privacy, and record-type metadata while preserving legacy constructors and
+  equality behavior.
+- LangChain integration claims are corrected and guarded by tests:
+  `ContractsMemory` records conversation turns as validator-valid
+  source/episode/evidence trace and returns a legacy `context_pack`
+  session-trace envelope. It does not promote turns into trusted ledger facts
+  or return a full `ContextPack` record.
+- `ContractsMemoryConfig.privacy_class` is now applied to generated
+  source/span trace records, and shared-session privacy conflicts fail closed.
+- Shared-store writers for the same LangChain session now allocate turn
+  indices from the store, preventing distinct adapters from silently reusing
+  episode/span ids for different turns.
+- Public docs now define three stability tiers: stable core, reference
+  runtime, and optional integrations.
+- Package metadata now uses modern SPDX license fields for cleaner release
+  builds.
+
+## What this release is honest about
+
+- The stable core is SemVer-stable and suitable as a trust-kernel dependency.
+- The reference runtime is an executable conformance target, not a hosted
+  production service recommendation.
+- LangChain and MCP extras are adapter-tier surfaces. They make the contracts
+  easier to exercise from existing tools, but they do not by themselves make an
+  agent's whole memory stack governed or poisoning-resistant.
+- Product work belongs in a separate wrapper/control-plane repo that can expose
+  observe, overlay, and enforce modes around existing memory systems.
+
+## Compatibility
+
+- Backwards-compatible with v1.2.0.
+- No schema migration required.
+- Existing public constructors and positional calling conventions are
+  preserved.
+- Existing core ID-helper bytes are preserved. Newly generated LangChain
+  adapter trace IDs change because the adapter now uses valid
+  source/episode/locator vocabularies.
+- Existing bundle fingerprint defaults are preserved; stricter duplicate
+  handling is opt-in.
+
+## Release checks
+
+Before tagging or publishing v1.3.0, run:
+
+```bash
+PYTHONPATH=src python3 -m pytest -q
+python -m mypy src/agent_memory_contracts
+PYTHONPATH=src python3 scripts/audit_public_api.py
+PYTHONPATH=src python3 -m compileall -q src
+git diff --check
+python scripts/check_release_artifacts.py --run-sdist-tests --run-examples
+```
+
+The review packet for this release-readiness sprint lives at
+`docs/sprints/v1.3.0-stability-release-readiness/REVIEW_PACKET.md`.
+
+## Provenance
+
+- Repository: https://github.com/eoniclife/agent-memory-contracts
+- License: Apache-2.0
+- Source revision: the GitHub `v1.3.0` release tag is the authoritative
+  source revision for published artifacts.
+- Package: https://pypi.org/project/agent-memory-contracts/

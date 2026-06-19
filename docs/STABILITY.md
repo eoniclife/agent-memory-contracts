@@ -1,4 +1,4 @@
-# Stability Policy (v1.0.0)
+# Stability Policy (v1.x)
 
 This document codifies the **public API surface**, the
 **SemVer policy**, the **CHANGELOG discipline**, the
@@ -9,6 +9,59 @@ The v1.0.0 commit is the **public API freeze**. After
 v1.0.0, every public name listed in this document is
 locked. Additions go in minor releases (1.1.0);
 breaking changes require a major release (2.0.0).
+
+---
+
+## Stability Tiers
+
+The SemVer promise covers every public Python name in `__all__`, but
+the product claim is narrower than "all modules are production
+services." The public surface has three tiers:
+
+### Stable Core
+
+The stable core is the trust-kernel surface: JSON Schemas, dataclasses,
+ID helpers, canonicalization behavior, validators, migrations, bundle
+fingerprint/diff/merge primitives, audit packs, access decisions, and
+the CLI. These APIs are suitable as direct dependencies for production
+systems that need governed-memory records and verifiable receipts.
+
+Stable core changes follow SemVer strictly. Additive fields, optional
+keyword-only parameters, new public names, and new reason-code values
+may ship in minor releases. ID-byte, schema-shape, required-field, or
+positional-call changes require the major-version process unless a
+specific compatibility path is documented here.
+
+### Reference Runtime
+
+`agent_memory_contracts.runtime` is the executable reference
+implementation for governed-memory semantics: sqlite3 storage,
+`MemoryGate`, audit anchors, deterministic pack builds, and
+grounded-or-refused answers. It exists so the contract can be tested
+end-to-end and so product-side ports have a conformance target.
+
+The runtime's public classes and functions are SemVer-governed, but
+the sqlite3 implementation is not a production service recommendation.
+`StorageBackend` describes the shared read/query surface. A production
+backend ports gate and store semantics together, exposes any
+HTTP/MCP/console surfaces outside this library, and treats the invariant
+suite as the acceptance gate.
+
+### Optional Integrations
+
+`agent_memory_contracts.integrations.langchain` and
+`agent_memory_contracts.integrations.mcp` are adapter-tier surfaces.
+Their documented import paths, constructor shapes, and response shapes
+are SemVer-governed, but their operational behavior depends on optional
+third-party packages and host applications.
+
+These integrations do not, by themselves, claim end-to-end memory
+enforcement for an agent application. The LangChain adapter records
+conversation turns as source/episode/evidence trace and returns a
+legacy `context_pack` session-trace envelope; it does not promote turns
+into trusted facts or return a full `ContextPack` record. The MCP
+adapter exposes contract operations over FastMCP; it is not a hosted
+control plane.
 
 ---
 
@@ -132,6 +185,7 @@ audit script `scripts/audit_public_api.py` walks
 | `DuplicateRecordError` | `bundles` | Strict duplicate-id error with record fingerprints |
 | `bundle_fingerprint` | `bundles` | SHA-256 fingerprint of a bundle |
 | `record_fingerprint` | `bundles` | SHA-256 fingerprint of one canonical record |
+| `BundleDiff` | `bundle_diff` | The result of a set-semantic bundle diff |
 | `bundle_diff` | `bundle_diff` | Set-semantic diff of two bundles |
 | `merge_bundles` | `merge` | Set-semantic merge of N bundles |
 | `BundleMerge` | `merge` | The result of a merge (with conflict list) |
@@ -287,9 +341,10 @@ The runtime subpackage is a complete, stdlib-only (sqlite3)
 **reference implementation** of how a product holds and moves
 governed memory records. The contracts above define *what* a
 record is; the runtime defines *how* a runtime holds and moves
-them. The product repo (Postgres/FastAPI/console) plugs in via
-the `StorageBackend` protocol; the sqlite3 implementation is the
-acceptance reference.
+them. Product-side ports, services, adapters, and control planes
+share the `StorageBackend` read/query surface, port gate/store
+semantics together, and use the invariant suite as the acceptance
+gate; the sqlite3 implementation is the acceptance reference.
 
 The runtime is a **reference**, not a recommendation for
 production. Its purpose is to (a) make the contract semantics
@@ -521,4 +576,7 @@ new public name, add a field to a schema, or remove a
 deprecated name. v2.0.0 is the first sprint that may
 break compatibility.
 
-The library is production-ready. Use it.
+The stable core is SemVer-stable and suitable as a trust-kernel
+dependency. The reference runtime is the executable conformance target.
+Optional integrations are adapters, not a substitute for a product
+control plane.

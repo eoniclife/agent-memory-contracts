@@ -16,6 +16,11 @@ pytest.importorskip("langchain_classic.base_memory")
 
 from langchain_classic.base_memory import BaseMemory  # noqa: E402
 
+from agent_memory_contracts import (  # noqa: E402
+    EpisodeRecord,
+    EvidenceSpan,
+    SourceRecord,
+)
 from agent_memory_contracts.integrations.langchain import (  # noqa: E402
     ContractsMemory,
     ContractsMemoryConfig,
@@ -46,6 +51,16 @@ class TestContractsMemoryIsBaseMemory(unittest.TestCase):
 class TestSaveAndLoad(unittest.TestCase):
     """save_context records; load_memory_variables returns the context_pack."""
 
+    @staticmethod
+    def _validate_trace_records(records: list[dict[str, Any]]) -> None:
+        for record in records:
+            if record.get("source_type") is not None:
+                SourceRecord.from_dict(record)
+            elif record.get("episode_type") is not None:
+                EpisodeRecord.from_dict(record)
+            elif record.get("span_hash_sha256") is not None:
+                EvidenceSpan.from_dict(record)
+
     def test_empty_session_returns_empty_context_pack(self) -> None:
         m = ContractsMemory(session_id="empty")
         result = m.load_memory_variables({"input": "x"})
@@ -61,6 +76,72 @@ class TestSaveAndLoad(unittest.TestCase):
         self.assertEqual(len(cp["records"]), 1)
         self.assertEqual(len(cp["evidence"]), 2)  # input + output
         self.assertEqual(len(cp["sources"]), 1)
+
+    def test_save_context_records_session_trace_not_trusted_facts(self) -> None:
+        m = ContractsMemory(session_id="sess-trace")
+        m.save_context({"input": "Hi"}, {"response": "Hello!"})
+
+        records = m.store.get_merged(m.session_id)
+        self._validate_trace_records(records)
+
+        episodes = [r for r in records if r.get("episode_type") == "conversation_segment"]
+        spans = [r for r in records if r.get("episode_id") is not None]
+        sources = [
+            r for r in records
+            if r.get("metadata", {}).get("integration") == "langchain"
+        ]
+        self.assertEqual(len(sources), 1)
+        self.assertEqual(len(episodes), 1)
+        self.assertEqual(len(spans), 2)
+        self.assertEqual(
+            set(episodes[0]["evidence_span_ids"]),
+            {span["id"] for span in spans},
+        )
+        self.assertEqual(
+            sum(1 for r in records if r.get("episode_id") is not None),
+            2,
+        )
+        self.assertFalse(any("ledger_type" in r for r in records))
+        self.assertFalse(any("reducer_decision_id" in r for r in records))
+        self.assertFalse(any("decision_type" in r for r in records))
+
+    def test_load_returns_trace_envelope_not_context_pack_record(self) -> None:
+        m = ContractsMemory(session_id="sess-envelope")
+        m.save_context({"input": "Hi"}, {"response": "Hello!"})
+
+        cp = m.load_memory_variables({"input": "followup"})["context_pack"]
+
+        self.assertEqual(cp["metadata"]["envelope_type"], "langchain_session_trace")
+        self.assertEqual(cp["session_id"], "sess-envelope")
+        for forbidden in (
+            "id",
+            "pack_type",
+            "task",
+            "authority",
+            "state",
+            "trusted_memory",
+            "constraints",
+            "retrieval_trace",
+            "build_receipt",
+            "validation_report",
+        ):
+            self.assertNotIn(forbidden, cp)
+
+    def test_configured_privacy_class_applies_to_generated_trace(self) -> None:
+        cfg = ContractsMemoryConfig(privacy_class="private")
+        m = ContractsMemory(session_id="sess-private", config=cfg)
+        m.save_context({"input": "Hi"}, {"response": "Hello!"})
+
+        records = m.store.get_merged(m.session_id)
+        self._validate_trace_records(records)
+        classified = [
+            r["privacy_class"]
+            for r in records
+            if r.get("metadata", {}).get("integration") == "langchain"
+            or r.get("episode_id") is not None
+        ]
+
+        self.assertEqual(classified, ["private", "private", "private"])
 
     def test_two_turns_yield_two_records(self) -> None:
         m = ContractsMemory(session_id="sess2")
@@ -138,6 +219,43 @@ class TestMemoryStore(unittest.TestCase):
         result = m2.load_memory_variables({"input": "followup"})
         self.assertEqual(len(result["context_pack"]["records"]), 1)
 
+    def test_shared_store_writes_allocate_distinct_turns(self) -> None:
+        store = MemoryStore()
+        m1 = ContractsMemory(session_id="shared-turns", store=store)
+        m2 = ContractsMemory(session_id="shared-turns", store=store)
+
+        m1.save_context({"input": "Q1"}, {"response": "A1"})
+        m2.save_context({"input": "Q2"}, {"response": "A2"})
+
+        cp = m1.load_memory_variables({"input": "followup"})["context_pack"]
+        self.assertEqual(len(cp["records"]), 2)
+        self.assertEqual(len(cp["evidence"]), 4)
+        self.assertEqual(
+            [record["metadata"]["turn_index"] for record in cp["records"]],
+            [0, 1],
+        )
+        self.assertEqual(
+            [span["text_excerpt"] for span in cp["evidence"]],
+            ["Q1", "{'response': 'A1'}", "Q2", "{'response': 'A2'}"],
+        )
+
+    def test_shared_store_rejects_privacy_class_conflict(self) -> None:
+        store = MemoryStore()
+        m1 = ContractsMemory(
+            session_id="shared-privacy",
+            config=ContractsMemoryConfig(privacy_class="private"),
+            store=store,
+        )
+        m2 = ContractsMemory(
+            session_id="shared-privacy",
+            config=ContractsMemoryConfig(privacy_class="public"),
+            store=store,
+        )
+        m1.save_context({"input": "Q"}, {"response": "A"})
+
+        with self.assertRaisesRegex(ValueError, "privacy_class"):
+            m2.save_context({"input": "Q2"}, {"response": "A2"})
+
     def test_session_count(self) -> None:
         store = MemoryStore()
         store.put("s1", [{"id": "a"}])
@@ -157,6 +275,10 @@ class TestContractsMemoryConfig(unittest.TestCase):
     def test_custom_privacy_class(self) -> None:
         cfg = ContractsMemoryConfig(privacy_class="private")
         self.assertEqual(cfg.privacy_class, "private")
+
+    def test_invalid_privacy_class_fails_closed(self) -> None:
+        with self.assertRaisesRegex(ValueError, "invalid privacy_class"):
+            ContractsMemoryConfig(privacy_class="customer")  # type: ignore[arg-type]
 
 
 class TestLangchainCompatibility(unittest.TestCase):
