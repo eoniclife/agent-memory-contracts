@@ -5,8 +5,8 @@ A *bundle merge* takes N bundles (each an iterable of records keyed by
 the same id appears in multiple input bundles with **different**
 content, the merge reports a conflict and lets the caller pick a
 resolution policy via ``prefer``. When the same id appears more than
-once **within** a single input bundle, the duplicate is resolved
-silently by last-write-wins (matching the convention used by
+once **within** a single input bundle, the duplicate is resolved by
+``duplicate_mode`` (matching the convention used by
 :func:`bundle_fingerprint` and :func:`bundle_diff`).
 
 Contrast with :func:`bundle_diff`:
@@ -46,7 +46,12 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Mapping
 
-from .bundles import _canonical_record
+from .bundles import (
+    DuplicateMode,
+    _canonical_record,
+    _raise_duplicate,
+    _validate_duplicate_mode,
+)
 
 
 @dataclass(frozen=True)
@@ -69,12 +74,12 @@ class BundleMerge:
             ``prefer`` policy; the policy only affects the *winner*
             in ``records``.
         duplicate_ids: Ids that appeared more than once in a single
-            input bundle. The intra-bundle last-write-wins policy
-            means these were resolved silently; the list is exposed
-            so callers can audit (e.g. flag ingestion bugs). Sorted
-            in the order in which the duplicates were first
-            observed (lowest bundle index, then lowest record
-            position).
+            input bundle. In non-raising modes, these were resolved by
+            ``duplicate_mode``; the list is exposed so callers can audit
+            ingestion behavior. Under ``duplicate_mode="raise"``, no
+            ``BundleMerge`` is returned. Sorted in the order in which
+            duplicates were first observed (lowest bundle index, then
+            lowest record position).
     """
 
     records: list[dict[str, Any]] = field(default_factory=list)
@@ -86,13 +91,15 @@ def merge_bundles(
     *bundles: Iterable[Any],
     id_field: str = "id",
     prefer: str = "last",
+    duplicate_mode: DuplicateMode = "last",
 ) -> BundleMerge:
     """Return the set-semantic union of N bundles.
 
     Each input bundle is an iterable of records (dicts, Mappings, or
     dataclass instances). Records are deduplicated by ``id_field``;
     duplicate ids within a single input bundle are resolved by
-    last-write-wins and reported in ``duplicate_ids``.
+    ``duplicate_mode`` and reported in ``duplicate_ids`` unless
+    ``duplicate_mode="raise"`` aborts the merge.
 
     When the same id appears in two or more different bundles with
     different content, the merge is a *conflict*:
@@ -121,6 +128,13 @@ def merge_bundles(
             - ``"first"``: the record from the **first** bundle that
               carries the id wins.
             - ``"raise"``: raise ``ValueError`` on the first conflict.
+        duplicate_mode: How to resolve repeated ``id_field`` values
+            within each input bundle. ``"last"`` is the legacy default
+            and keeps the final occurrence. ``"identical"`` collapses
+            byte-identical repeats and raises on divergent same-id
+            payloads. ``"raise"`` raises
+            :class:`agent_memory_contracts.DuplicateRecordError` on any
+            repeated id.
 
     Returns:
         A :class:`BundleMerge` with the merged records, the list of
@@ -129,36 +143,35 @@ def merge_bundles(
         duplicated within a single input bundle.
 
     Raises:
-        ValueError: If ``prefer`` is not one of ``"last"``,
-            ``"first"``, ``"raise"``, or if ``prefer="raise"`` and a
-            cross-bundle conflict is detected.
+        ValueError: If ``prefer`` or ``duplicate_mode`` is invalid, if
+            ``prefer="raise"`` and a cross-bundle conflict is detected,
+            or if ``duplicate_mode="raise"`` and an input bundle
+            repeats an id.
     """
     if prefer not in ("last", "first", "raise"):
         raise ValueError(
             f"prefer must be 'last', 'first', or 'raise'; got {prefer!r}"
         )
+    _validate_duplicate_mode(duplicate_mode)
 
     # Per-id accumulator:
     #   winning_canonical: the canonical JSON of the record that
     #     will end up in the merged bundle (per the prefer policy).
     #   winning_dict: the matching plain dict (output form).
-    #   contributing: list of (bundle_index, record_dict) -- one
-    #     entry per bundle that carried this id, in bundle order.
+    #   contributing: list of (bundle_index, record_dict, canonical)
+    #     -- one entry per bundle that carried this id, in bundle order.
     #     We keep this even when the canonicals all agree, so the
     #     conflict list is always informative.
-    #   bundle_indices_seen: parallel list of bundle indices for
-    #     `contributing` (used to pick first/last winner).
     #   duplicate_seen: whether this id was duplicated *within* a
     #     single bundle.
     winning_canonical: dict[str, str] = {}
     winning_dict: dict[str, dict[str, Any]] = {}
-    contributing: dict[str, list[tuple[int, dict[str, Any]]]] = {}
-    bundle_indices_seen: dict[str, list[int]] = {}
+    contributing: dict[str, list[tuple[int, dict[str, Any], str]]] = {}
     duplicate_ids_in_order: list[str] = []
     duplicate_seen: set[str] = set()
 
     for bundle_index, bundle in enumerate(bundles):
-        # Per-bundle last-write-wins.
+        # Per-bundle duplicate-policy reduction.
         per_bundle_winner: dict[str, str] = {}
         per_bundle_dict: dict[str, dict[str, Any]] = {}
         per_bundle_order: list[str] = []  # first-seen order in this bundle
@@ -166,11 +179,28 @@ def merge_bundles(
         for record in bundle:
             id_value, canonical = _canonical_record(record, id_field)
             if id_value in per_bundle_winner:
-                # Duplicate within this bundle. Last write wins; track
-                # the id as duplicated (report it once).
+                # Duplicate within this bundle. Track the id as
+                # duplicated (report it once), then apply the requested
+                # intra-bundle duplicate policy.
                 if id_value not in duplicate_seen:
                     duplicate_seen.add(id_value)
                     duplicate_ids_in_order.append(id_value)
+                if duplicate_mode == "raise":
+                    _raise_duplicate(
+                        id_field=id_field,
+                        id_value=id_value,
+                        first_canonical=per_bundle_winner[id_value],
+                        duplicate_canonical=canonical,
+                    )
+                if duplicate_mode == "identical":
+                    if canonical != per_bundle_winner[id_value]:
+                        _raise_duplicate(
+                            id_field=id_field,
+                            id_value=id_value,
+                            first_canonical=per_bundle_winner[id_value],
+                            duplicate_canonical=canonical,
+                        )
+                    continue
             else:
                 per_bundle_order.append(id_value)
             per_bundle_winner[id_value] = canonical
@@ -189,21 +219,23 @@ def merge_bundles(
                 # First time we see this id across all bundles.
                 winning_canonical[id_value] = canonical
                 winning_dict[id_value] = rec_dict
-                contributing[id_value] = [(bundle_index, rec_dict)]
-                bundle_indices_seen[id_value] = [bundle_index]
+                contributing[id_value] = [(bundle_index, rec_dict, canonical)]
             else:
                 # Already seen in an earlier bundle.
-                bundle_indices_seen[id_value].append(bundle_index)
                 if canonical == winning_canonical[id_value]:
                     # Same content as the current winner. The
                     # contributing list gets a new entry so the
                     # caller can see this id was present in
                     # multiple bundles, but no conflict.
-                    contributing[id_value].append((bundle_index, rec_dict))
+                    contributing[id_value].append(
+                        (bundle_index, rec_dict, canonical)
+                    )
                 else:
                     # Conflict: this id has different content in
                     # different bundles.
-                    contributing[id_value].append((bundle_index, rec_dict))
+                    contributing[id_value].append(
+                        (bundle_index, rec_dict, canonical)
+                    )
                     if prefer == "raise":
                         raise ValueError(
                             f"merge_bundles: id {id_value!r} has different "
@@ -222,39 +254,21 @@ def merge_bundles(
                         pass
 
     # Build the conflict list: an id is a conflict iff it appeared
-    # in >= 2 different bundles with >= 2 distinct canonicals.
-    # Equivalently: contributing has >= 2 entries AND not all
-    # canonicals are equal. We can derive this from the contributing
-    # list by canonicalising each entry's dict and grouping equal
-    # values. To keep this O(n) per id, we re-canonicalise each
-    # contributing dict and dedupe.
+    # in >= 2 different bundles with >= 2 distinct canonical payloads.
     conflicts: list[tuple[str, list[tuple[int, dict[str, Any]]]]] = []
     for id_value, entries in contributing.items():
-        # Group by canonical. If > 1 group, this is a conflict.
-        # We do not re-canonicalise; we compare dict equality
-        # via the canonical that was already produced in the loop
-        # above. Re-derive by recomputing canonical for each entry
-        # is the cleanest, and we already have per-bundle canonicals
-        # -- but those are per-bundle winners. If the same id
-        # appears twice in a single bundle, the per-bundle winner
-        # is the last occurrence, and the contributing list only
-        # has that one entry for that bundle. So
-        # `per-bundle-canonical == json.dumps(contributing[i][1])`
-        # is always true. Use dict equality directly: two records
-        # with the same canonical JSON will compare equal as
-        # dicts.
-        unique_dicts: list[dict[str, Any]] = []
-        for _idx, rec in entries:
-            if rec not in unique_dicts:
-                unique_dicts.append(rec)
-        if len(unique_dicts) > 1:
+        unique_canonicals = {canonical for _idx, _rec, canonical in entries}
+        if len(unique_canonicals) > 1:
             # Sort the entries for stability: bundle index
             # ascending, then position-within-bundle ascending.
             # Position-within-bundle is not separately tracked; we
-            # only have bundle index. Within a bundle the id can
-            # only appear once after last-write-wins, so the sort
+            # only have bundle index. Within a bundle the id can only
+            # appear once after duplicate-policy reduction, so the sort
             # by bundle index is sufficient and stable.
-            sorted_entries = sorted(entries, key=lambda e: e[0])
+            sorted_entries = [
+                (idx, rec)
+                for idx, rec, _canonical in sorted(entries, key=lambda e: e[0])
+            ]
             conflicts.append((id_value, sorted_entries))
 
     # Sort conflicts by id for deterministic output.

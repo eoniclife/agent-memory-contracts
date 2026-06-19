@@ -129,7 +129,9 @@ audit script `scripts/audit_public_api.py` walks
 
 | Name | Module | Description |
 | --- | --- | --- |
+| `DuplicateRecordError` | `bundles` | Strict duplicate-id error with record fingerprints |
 | `bundle_fingerprint` | `bundles` | SHA-256 fingerprint of a bundle |
+| `record_fingerprint` | `bundles` | SHA-256 fingerprint of one canonical record |
 | `bundle_diff` | `bundle_diff` | Set-semantic diff of two bundles |
 | `merge_bundles` | `merge` | Set-semantic merge of N bundles |
 | `BundleMerge` | `merge` | The result of a merge (with conflict list) |
@@ -343,9 +345,10 @@ After v1.0.0, the library follows [Semantic Versioning](https://semver.org/):
 - **Patch (`1.0.x`):** bug fixes only. No new features, no
   signature changes, no removals.
 - **Minor (`1.x.0`):** new features, backwards compatible.
-  New public names are added; existing public names
-  do not change. A deprecation marker may be added
-  (see Deprecation Policy below).
+  New public names may be added; existing public functions may gain
+  optional keyword-only parameters with backwards-compatible defaults.
+  Existing positional calling conventions do not change. A deprecation
+  marker may be added (see Deprecation Policy below).
 - **Major (`x.0.0`):** breaking changes allowed. Public
   names may be removed or renamed; signatures may
   change. A deprecation cycle is required for any

@@ -448,6 +448,24 @@ class CLIFingerprintJSONModeTests(unittest.TestCase):
         self.assertEqual(payload["ok"], False)
         self.assertIn("not found", payload["error"])
 
+    def test_fingerprint_json_duplicate_error_is_structured(self):
+        path = self._write_json("bundle.json", [
+            {"id": "x", "v": 1},
+            {"id": "x", "v": 2},
+        ])
+        r = _run(["--json", "fingerprint", str(path), "--duplicate-mode", "identical"])
+        self.assertEqual(r.returncode, 1)
+        self.assertEqual(r.stdout, "")
+        payload = json.loads(r.stderr)
+        self.assertEqual(payload["ok"], False)
+        self.assertEqual(payload["path"], str(path))
+        self.assertEqual(payload["error_code"], "duplicate_record")
+        self.assertEqual(payload["id_field"], "id")
+        self.assertEqual(payload["id_value"], "x")
+        self.assertFalse(payload["same_content"])
+        self.assertEqual(len(payload["first_fingerprint"]), 64)
+        self.assertEqual(len(payload["duplicate_fingerprint"]), 64)
+
 
 # ---------------------------------------------------------------------------
 # diff --json
@@ -535,6 +553,26 @@ class CLIDiffJSONModeTests(unittest.TestCase):
         payload = json.loads(r.stderr)
         self.assertEqual(payload["ok"], False)
         self.assertIn("not found", payload["error"])
+
+    def test_diff_json_duplicate_error_is_structured(self):
+        a = self._write_json("a.json", [
+            {"id": "x", "v": 1},
+            {"id": "x", "v": 2},
+        ])
+        b = self._write_json("b.json", [{"id": "x", "v": 1}])
+        r = _run(["--json", "diff", str(a), str(b), "--duplicate-mode", "identical"])
+        self.assertEqual(r.returncode, 1)
+        self.assertEqual(r.stdout, "")
+        payload = json.loads(r.stderr)
+        self.assertEqual(payload["ok"], False)
+        self.assertEqual(payload["path_a"], str(a))
+        self.assertEqual(payload["path_b"], str(b))
+        self.assertEqual(payload["error_code"], "duplicate_record")
+        self.assertEqual(payload["id_field"], "id")
+        self.assertEqual(payload["id_value"], "x")
+        self.assertFalse(payload["same_content"])
+        self.assertEqual(len(payload["first_fingerprint"]), 64)
+        self.assertEqual(len(payload["duplicate_fingerprint"]), 64)
 
 
 # ---------------------------------------------------------------------------

@@ -8,8 +8,9 @@ operational primitives of the library:
 - ``fingerprint`` Print the deterministic SHA-256 fingerprint of a bundle.
 - ``diff``       Compare two bundles and print a set-semantic diff.
 - ``merge``      Merge two or more bundles into one (set-semantic,
-                 last-write-wins on duplicate ids; ``--prefer`` selects
-                 the conflict-resolution policy).
+                 ``--duplicate-mode`` selects intra-bundle duplicate
+                 handling; ``--prefer`` selects cross-bundle conflict
+                 resolution).
 - ``hygiene``    Compute a memory hygiene report for a bundle
                  (counts by plane / type / privacy, temporal state,
                  evidence integrity). Markdown by default, JSON with
@@ -68,7 +69,7 @@ from typing import Any, Callable
 # the surface we use lives in dedicated submodules. Importing from
 # the submodules keeps this CLI working without requiring a change
 # to the package's __init__.
-from agent_memory_contracts import bundle_fingerprint
+from agent_memory_contracts import DuplicateRecordError, bundle_fingerprint
 from agent_memory_contracts.bundle_diff import BundleDiff, bundle_diff
 from agent_memory_contracts.jsonschema_validator import (
     SchemaNotFoundError,
@@ -97,6 +98,19 @@ from agent_memory_contracts.audit import (
 
 
 PACKAGE_NAME = "agent-memory-contracts"
+
+
+def _duplicate_error_fields(exc: DuplicateRecordError) -> dict[str, Any]:
+    """Return the stable JSON fields for a duplicate-record failure."""
+    return {
+        "error_code": "duplicate_record",
+        "error": str(exc),
+        "id_field": exc.id_field,
+        "id_value": exc.id_value,
+        "first_fingerprint": exc.first_fingerprint,
+        "duplicate_fingerprint": exc.duplicate_fingerprint,
+        "same_content": exc.same_content,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -458,7 +472,28 @@ def cmd_fingerprint(args: argparse.Namespace) -> int:
             print(f"fingerprint: failed to parse {path}: {exc}",
                   file=sys.stderr)
         return 1
-    digest = bundle_fingerprint(records)
+    try:
+        digest = bundle_fingerprint(
+            records, duplicate_mode=args.duplicate_mode,
+        )
+    except DuplicateRecordError as exc:
+        if args.json:
+            _emit_json(
+                {"ok": False, "path": str(path), **_duplicate_error_fields(exc)},
+                to_stderr=True,
+            )
+        else:
+            print(f"fingerprint: {exc}", file=sys.stderr)
+        return 1
+    except ValueError as exc:
+        if args.json:
+            _emit_json(
+                {"ok": False, "path": str(path), "error": str(exc)},
+                to_stderr=True,
+            )
+        else:
+            print(f"fingerprint: {exc}", file=sys.stderr)
+        return 1
     if args.json:
         _emit_json(
             {"ok": True, "path": str(path), "fingerprint": digest,
@@ -516,7 +551,28 @@ def cmd_diff(args: argparse.Namespace) -> int:
         else:
             print(f"diff: failed to parse input: {exc}", file=sys.stderr)
         return 1
-    result = bundle_diff(a, b)
+    try:
+        result = bundle_diff(a, b, duplicate_mode=args.duplicate_mode)
+    except DuplicateRecordError as exc:
+        if args.json:
+            _emit_json(
+                {"ok": False, "path_a": str(a_path), "path_b": str(b_path),
+                 **_duplicate_error_fields(exc)},
+                to_stderr=True,
+            )
+        else:
+            print(f"diff: {exc}", file=sys.stderr)
+        return 1
+    except ValueError as exc:
+        if args.json:
+            _emit_json(
+                {"ok": False, "path_a": str(a_path), "path_b": str(b_path),
+                 "error": str(exc)},
+                to_stderr=True,
+            )
+        else:
+            print(f"diff: {exc}", file=sys.stderr)
+        return 1
     if args.json:
         _emit_json(
             {"ok": True,
@@ -601,10 +657,23 @@ def cmd_merge(args: argparse.Namespace) -> int:
 
     try:
         result = merge_bundles(
-            *bundles, id_field=args.id_field, prefer=args.prefer,
+            *bundles,
+            id_field=args.id_field,
+            prefer=args.prefer,
+            duplicate_mode=args.duplicate_mode,
         )
+    except DuplicateRecordError as exc:
+        if args.json:
+            _emit_json(
+                {"ok": False, **_duplicate_error_fields(exc)},
+                to_stderr=True,
+            )
+        else:
+            print(f"merge: {exc}", file=sys.stderr)
+        return 1
     except ValueError as exc:
-        # Raised by prefer='raise' on a content conflict.
+        # Raised by prefer='raise' on a cross-bundle content conflict
+        # or by invalid policy values.
         if args.json:
             _emit_json({"ok": False, "error": str(exc)}, to_stderr=True)
         else:
@@ -615,6 +684,7 @@ def cmd_merge(args: argparse.Namespace) -> int:
         _emit_json({
             "ok": True,
             "prefer": args.prefer,
+            "duplicate_mode": args.duplicate_mode,
             "id_field": args.id_field,
             "input_count": len(bundles),
             "record_count": len(result.records),
@@ -628,11 +698,16 @@ def cmd_merge(args: argparse.Namespace) -> int:
             "records": result.records,
         })
     else:
+        suffix = (
+            f", duplicate_mode={args.duplicate_mode}"
+            if args.duplicate_mode != "last"
+            else ""
+        )
         print(
             f"merged: {len(result.records)} records, "
             f"{len(result.conflicts)} conflict(s), "
             f"{len(result.duplicate_ids)} duplicate id(s) "
-            f"(prefer={args.prefer}, id_field={args.id_field}, "
+            f"(prefer={args.prefer}, id_field={args.id_field}{suffix}, "
             f"inputs={len(bundles)})"
         )
     return 0
@@ -899,6 +974,18 @@ def _build_parser() -> argparse.ArgumentParser:
     p_fingerprint.add_argument(
         "path", help="Path to the JSON or JSONL bundle.",
     )
+    p_fingerprint.add_argument(
+        "--duplicate-mode",
+        choices=["last", "identical", "raise"],
+        default="last",
+        help=(
+            "How to handle duplicate ids within the bundle. 'last' "
+            "(default) preserves legacy last-write-wins behavior; "
+            "'identical' collapses byte-identical repeats but fails on "
+            "divergent same-id payloads; 'raise' fails on any duplicate "
+            "id and reports record fingerprints."
+        ),
+    )
     p_fingerprint.set_defaults(_func=cmd_fingerprint)
 
     p_diff = sub.add_parser(
@@ -912,6 +999,18 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p_diff.add_argument("path_a", help="Path to the 'before' bundle.")
     p_diff.add_argument("path_b", help="Path to the 'after' bundle.")
+    p_diff.add_argument(
+        "--duplicate-mode",
+        choices=["last", "identical", "raise"],
+        default="last",
+        help=(
+            "How to handle duplicate ids within each input bundle. "
+            "'last' (default) preserves legacy last-write-wins behavior; "
+            "'identical' collapses byte-identical repeats but fails on "
+            "divergent same-id payloads; 'raise' fails on any duplicate "
+            "id and reports record fingerprints."
+        ),
+    )
     p_diff.set_defaults(_func=cmd_diff)
 
     p_merge = sub.add_parser(
@@ -949,6 +1048,18 @@ def _build_parser() -> argparse.ArgumentParser:
         help=(
             "The field that uniquely identifies each record. "
             "Defaults to 'id'."
+        ),
+    )
+    p_merge.add_argument(
+        "--duplicate-mode",
+        choices=["last", "identical", "raise"],
+        default="last",
+        help=(
+            "How to handle duplicate ids within a single input bundle. "
+            "'last' (default) preserves legacy last-write-wins behavior; "
+            "'identical' collapses byte-identical repeats but fails on "
+            "divergent same-id payloads; 'raise' fails on any duplicate "
+            "id and reports record fingerprints."
         ),
     )
     p_merge.set_defaults(_func=cmd_merge)

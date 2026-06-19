@@ -273,6 +273,23 @@ class CLIFingerprintTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("not found", result.stderr)
 
+    def test_fingerprint_duplicate_mode_raise_exits_1(self):
+        path = self._write_json("bundle.json", [
+            {"id": "rec_00000000", "v": 1},
+            {"id": "rec_00000000", "v": 2},
+        ])
+        result = subprocess.run(
+            ["python3", "-m", "agent_memory_contracts", "fingerprint",
+             str(path), "--duplicate-mode", "raise"],
+            capture_output=True,
+            text=True,
+            env={**subprocess.os.environ, "PYTHONPATH": "src"},
+            cwd=Path(__file__).parent.parent,
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("duplicate record id", result.stderr)
+        self.assertIn("first_fingerprint", result.stderr)
+
 
 class CLIDiffTests(unittest.TestCase):
     """``diff <path-a> <path-b>`` prints a human-readable summary."""
@@ -348,6 +365,40 @@ class CLIDiffTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 1)
         self.assertIn("not found", result.stderr)
+
+    def test_diff_duplicate_mode_identical_accepts_same_duplicate(self):
+        a = self._write_json("a.json", [
+            {"id": "x", "v": 1},
+            {"id": "x", "v": 1},
+        ])
+        b = self._write_json("b.json", [{"id": "x", "v": 1}])
+        result = subprocess.run(
+            ["python3", "-m", "agent_memory_contracts", "diff",
+             str(a), str(b), "--duplicate-mode", "identical"],
+            capture_output=True,
+            text=True,
+            env={**subprocess.os.environ, "PYTHONPATH": "src"},
+            cwd=Path(__file__).parent.parent,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("0 changed", result.stdout)
+
+    def test_diff_duplicate_mode_raise_exits_1(self):
+        a = self._write_json("a.json", [
+            {"id": "x", "v": 1},
+            {"id": "x", "v": 2},
+        ])
+        b = self._write_json("b.json", [{"id": "x", "v": 1}])
+        result = subprocess.run(
+            ["python3", "-m", "agent_memory_contracts", "diff",
+             str(a), str(b), "--duplicate-mode", "raise"],
+            capture_output=True,
+            text=True,
+            env={**subprocess.os.environ, "PYTHONPATH": "src"},
+            cwd=Path(__file__).parent.parent,
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("duplicate record id", result.stderr)
 
 
 if __name__ == "__main__":
