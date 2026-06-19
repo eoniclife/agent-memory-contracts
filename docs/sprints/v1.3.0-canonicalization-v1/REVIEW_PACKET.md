@@ -35,8 +35,9 @@ Changed surfaces:
   fingerprint record serialization.
 - `src/agent_memory_contracts/runtime/store.py`: preserves the module-level
   `canonical_json` wrapper and delegates to the shared helper.
-- `src/agent_memory_contracts/runtime/anchors.py`: uses the shared helper for
-  `make_scope(...)` scope serialization in the anchor chain.
+- `src/agent_memory_contracts/runtime/anchors.py`: preserves legacy stored scope
+  serialization for replay descriptors; anchor fingerprints continue to use
+  `bundle_fingerprint(...)`.
 - `docs/CANONICALIZATION-v1.md`: durable byte contract and golden vector table.
 - `tests/test_canonicalization.py`: regression tests for canonical JSON bytes,
   existing ID vectors, and existing bundle fingerprint vectors.
@@ -54,8 +55,8 @@ Changed surfaces:
 ## Compatibility
 
 This sprint is intended to be byte-for-byte compatible for existing IDs, bundle
-fingerprints, runtime payload comparisons, and gate-built audit anchor scopes.
-It is a refactor plus documentation/test hardening.
+fingerprints, and runtime payload comparisons. It is a refactor plus
+documentation/test hardening.
 
 Callers importing existing helper functions continue to work:
 
@@ -103,9 +104,11 @@ Results:
    surfaces that external ports are likely to reimplement?
 3. Are any remaining local `json.dumps` sites actually identity-bearing and
    therefore missing from this centralization pass?
-4. Should `docs/CANONICALIZATION-v1.md` become part of the packaged wheel, or is
+4. Is it right that stored audit-anchor scope text stays on legacy JSON bytes,
+   while the anchor fingerprint remains governed by `bundle_fingerprint(...)`?
+5. Should `docs/CANONICALIZATION-v1.md` become part of the packaged wheel, or is
    repository-level documentation enough for v1.3.0?
-5. Is the compatibility story clear enough for adapters that already imported
+6. Is the compatibility story clear enough for adapters that already imported
    the old wrapper helpers?
 
 ## Residual Risks
@@ -113,10 +116,6 @@ Results:
 - Python's JSON behavior is the reference implementation here. Ports in other
   runtimes need to match escaping, key ordering, Unicode handling, numeric
   rendering, and separator bytes against the golden vectors.
-- `append_anchor(...)` now routes scope serialization through the shared helper.
-  Current `make_scope(...)` values are ASCII ids/statuses, so gate-built scopes
-  keep the same bytes; manually supplied non-ASCII custom scopes would serialize
-  with UTF-8 rather than escaped Unicode.
 - The central helper is intentionally private; that avoids freezing too much
   public surface, but it also means external users rely on docs and tests rather
   than a formal import.

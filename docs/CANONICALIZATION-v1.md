@@ -1,8 +1,7 @@
 # Canonicalization v1
 
 Canonicalization v1 is the byte contract used by Agent Memory Contracts for
-content-derived ids, bundle fingerprints, runtime payload comparison, and audit
-anchor scope serialization.
+content-derived ids, bundle fingerprints, and runtime payload comparison.
 
 The rule is deliberately small:
 
@@ -20,8 +19,7 @@ The resulting text is encoded as UTF-8 before hashing with SHA-256.
 ## Compatibility
 
 This document records existing behavior. It does not change any valid v1 id
-bytes, bundle fingerprints, runtime payload bytes, or gate-built audit anchor
-scope bytes.
+bytes, bundle fingerprints, or runtime payload bytes.
 
 Changing this rule for valid records is a v2 event. v1.3.x changes may
 centralize implementation, add wrappers, or add tests, but must preserve the
@@ -38,8 +36,11 @@ Canonicalization v1 applies to:
 - state ids: `projstate_*`, `corestate_*`, `redstate_*`;
 - ContextPack ids: `ctx_*`, `ctxreceipt_*`, `ctxval_*`;
 - `bundle_fingerprint(records)`;
-- runtime `canonical_json(payload)` comparisons;
-- audit anchor scope serialization for `make_scope(...)` scopes.
+- runtime `canonical_json(payload)` comparisons.
+
+Audit-anchor scope text deliberately preserves its legacy JSON serialization.
+The anchor fingerprint still uses `bundle_fingerprint(...)`; the stored `scope`
+column is a replay descriptor and is not part of canonicalization v1.
 
 ## Non-Goals
 
