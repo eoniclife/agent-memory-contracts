@@ -324,6 +324,39 @@ class BundleValidationTests(unittest.TestCase):
                 ledger_entries=[e1, e2],
             )
 
+    def test_supersession_self_loop_is_rejected(self):
+        source, span = build_source_and_span()
+        candidate_dict = _build_candidate_record(span.id)
+        candidate_id = candidate_dict["id"]
+        entry = _preference_entry(
+            source.id, span.id, candidate_id, "redmem_pending", "self"
+        )
+        entry_dict = asdict(entry)
+        reducer = _reducer(
+            [candidate_id],
+            [entry_dict["id"]],
+            [span.id],
+            decision_type="supersede",
+        )
+        entry_dict["status"] = "superseded"
+        entry_dict["reducer_decision_id"] = reducer.id
+        entry_dict["superseded_by"] = [entry_dict["id"]]
+        entry_dict["supersedes"] = [entry_dict["id"]]
+        entry_dict["valid_until"] = T_DECIDED
+
+        with self.assertRaisesRegex(
+            ValueError,
+            f"ledger supersession cycle detected: {entry.id} -> {entry.id}",
+        ):
+            validate_ledger_bundle(
+                source_records=[asdict(source)],
+                episode_records=[],
+                evidence_spans=[asdict(span)],
+                candidate_records=[candidate_dict],
+                reducer_decisions=[asdict(reducer)],
+                ledger_entries=[entry_dict],
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

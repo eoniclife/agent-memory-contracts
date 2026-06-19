@@ -7,7 +7,10 @@ import unittest
 from dataclasses import asdict
 
 from agent_memory_contracts import (
+    CoreStateSnapshot,
     ProjectStateSnapshot,
+    core_state_supersession_chain,
+    make_core_state_id,
     make_project_state_id,
     make_state_reducer_decision_id,
     project_state_from_dict,
@@ -75,6 +78,103 @@ def _project_state(project_id: str, span_id: str, as_of: str, summary: str) -> P
         "superseded_by": [],
         "metadata": {"human_asserted": True},
     })
+
+
+def _core_state(span_id: str, as_of: str, summary: str) -> CoreStateSnapshot:
+    payload = {
+        "subject": "Aditya",
+        "as_of": as_of,
+        "current_priorities": ["ship memory contracts"],
+        "active_project_state_ids": [],
+        "standing_principles": ["truth over narrative"],
+        "operating_style": ["evidence first"],
+        "approval_boundaries": [],
+        "constraints": [],
+        "active_fact_ids": [],
+        "active_preference_ids": [],
+        "active_decision_ids": [],
+        "active_taste_card_ids": [],
+        "evidence_span_ids": [span_id],
+    }
+    cid = make_core_state_id("Aditya", as_of, [span_id], payload)
+    return CoreStateSnapshot.from_dict({
+        "id": cid,
+        "schema_version": "1.0.0",
+        "state_type": "core_state",
+        "status": "active",
+        "as_of": as_of,
+        "summary": summary,
+        "active_fact_ids": [],
+        "active_preference_ids": [],
+        "active_decision_ids": [],
+        "active_taste_card_ids": [],
+        "source_record_ids": [],
+        "episode_record_ids": [],
+        "evidence_span_ids": [span_id],
+        "reducer_decision_id": "redstate_" + "a" * 24,
+        "valid_from": as_of,
+        "valid_until": None,
+        "stale_after": None,
+        "created_at": T_DECIDED,
+        "updated_at": T_DECIDED,
+        "supersedes": [],
+        "superseded_by": [],
+        "metadata": {"human_asserted": True},
+        "subject": "Aditya",
+        "current_priorities": ["ship memory contracts"],
+        "active_project_state_ids": [],
+        "standing_principles": ["truth over narrative"],
+        "operating_style": ["evidence first"],
+        "approval_boundaries": [],
+        "constraints": [],
+    })
+
+
+def _state_reducer_dict(
+    *,
+    target_project_state_ids: list[str],
+    target_core_state_ids: list[str],
+    span_id: str,
+) -> dict:
+    rid = make_state_reducer_decision_id(
+        "supersede",
+        target_project_state_ids,
+        target_core_state_ids,
+        [span_id],
+        [],
+        [],
+        "ok",
+    )
+    return {
+        "id": rid,
+        "schema_version": "1.0.0",
+        "decision_type": "supersede",
+        "target_project_state_ids": target_project_state_ids,
+        "target_core_state_ids": target_core_state_ids,
+        "source_record_ids": [],
+        "episode_record_ids": [],
+        "evidence_span_ids": [span_id],
+        "ledger_entry_ids": [],
+        "taste_card_ids": [],
+        "rationale": "ok",
+        "decided_by": {
+            "agent": "state-reducer",
+            "model": "gpt-5.5",
+            "tool": None,
+            "prompt_ref": None,
+        },
+        "decided_at": T_DECIDED,
+        "confidence": "high",
+        "risk_class": "low",
+        "checks": {
+            "provenance": "pass",
+            "temporal_validity": "pass",
+            "state_consistency": "pass",
+            "privacy": "pass",
+            "usefulness": "pass",
+        },
+        "metadata": {},
+    }
 
 
 class StateIdTests(unittest.TestCase):
@@ -153,6 +253,17 @@ class StateQueryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "state supersession cycle detected"):
             project_state_supersession_chain(s1.id, [d1, d2])
 
+    def test_core_state_supersession_chain_rejects_cycles(self):
+        _, span = build_source_and_span()
+        s1 = _core_state(span.id, "2026-05-30T13:00:00Z", "v1")
+        s2 = _core_state(span.id, "2026-05-30T18:00:00Z", "v2")
+        d1 = asdict(s1)
+        d2 = asdict(s2)
+        d1["superseded_by"] = [s2.id]
+        d2["superseded_by"] = [s1.id]
+        with self.assertRaisesRegex(ValueError, "state supersession cycle detected"):
+            core_state_supersession_chain(s1.id, [d1, d2])
+
     def test_state_bundle_rejects_supersession_cycle(self):
         source, span = build_source_and_span()
         s1 = _project_state("p1", span.id, "2026-05-30T13:00:00Z", "v1")
@@ -207,6 +318,41 @@ class StateQueryTests(unittest.TestCase):
                 state_reducer_decisions=[reducer_dict],
                 project_states=[d1, d2],
                 core_states=[],
+            )
+
+    def test_state_bundle_rejects_core_supersession_cycle(self):
+        source, span = build_source_and_span()
+        s1 = _core_state(span.id, "2026-05-30T13:00:00Z", "v1")
+        s2 = _core_state(span.id, "2026-05-30T18:00:00Z", "v2")
+        d1 = asdict(s1)
+        d2 = asdict(s2)
+        reducer_dict = _state_reducer_dict(
+            target_project_state_ids=[],
+            target_core_state_ids=[s1.id, s2.id],
+            span_id=span.id,
+        )
+        for state, successor, predecessor in (
+            (d1, s2.id, s2.id),
+            (d2, s1.id, s1.id),
+        ):
+            state["status"] = "superseded"
+            state["reducer_decision_id"] = reducer_dict["id"]
+            state["superseded_by"] = [successor]
+            state["supersedes"] = [predecessor]
+            state["valid_from"] = T_DECIDED
+            state["valid_until"] = T_DECIDED
+
+        with self.assertRaisesRegex(ValueError, "state supersession cycle detected"):
+            validate_state_bundle(
+                source_records=[asdict(source)],
+                episode_records=[],
+                evidence_spans=[asdict(span)],
+                candidate_records=[],
+                ledger_entries=[],
+                taste_cards=[],
+                state_reducer_decisions=[reducer_dict],
+                project_states=[],
+                core_states=[d1, d2],
             )
 
 
